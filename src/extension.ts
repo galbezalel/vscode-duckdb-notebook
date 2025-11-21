@@ -17,19 +17,14 @@ class DuckDBViewerProvider
 {
   public static register(context: vscode.ExtensionContext): vscode.Disposable {
     const provider = new DuckDBViewerProvider(context);
-    const commonOptions: vscode.WebviewPanelOptions &
-      vscode.WebviewOptions &
-      vscode.CustomTextEditorOptions = {
-      enableScripts: true,
-      retainContextWhenHidden: true,
-    };
+    const retainContextWhenHidden = true;
 
     const csv = vscode.window.registerCustomEditorProvider(
       "duckdb.csvViewer",
       provider,
       {
         webviewOptions: {
-          retainContextWhenHidden: commonOptions.retainContextWhenHidden,
+          retainContextWhenHidden,
         },
         supportsMultipleEditorsPerDocument: false,
       },
@@ -40,7 +35,7 @@ class DuckDBViewerProvider
       provider,
       {
         webviewOptions: {
-          retainContextWhenHidden: commonOptions.retainContextWhenHidden,
+          retainContextWhenHidden,
         },
         supportsMultipleEditorsPerDocument: false,
       },
