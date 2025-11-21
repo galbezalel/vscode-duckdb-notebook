@@ -1,5 +1,10 @@
 node_modules/
+media/duckdb/
 out/
 *.vsix
 .DS_Store
 .vscode/
+
+*.parquet
+*.csv
+*.log
