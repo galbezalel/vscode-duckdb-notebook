@@ -111,6 +111,27 @@ class DuckDBViewerProvider
             vscode.window.showInformationMessage("Copied results to clipboard.");
           }
           break;
+        case "exportData":
+          try {
+            const { data, format, defaultName } = message;
+            // data is an ArrayBuffer or Uint8Array
+            const buffer = new Uint8Array(data);
+
+            const uri = await vscode.window.showSaveDialog({
+              defaultUri: vscode.Uri.file(defaultName),
+              filters: {
+                [format === 'csv' ? 'CSV' : 'Parquet']: [format]
+              }
+            });
+
+            if (uri) {
+              await vscode.workspace.fs.writeFile(uri, buffer);
+              vscode.window.showInformationMessage(`Successfully exported to ${path.basename(uri.fsPath)}`);
+            }
+          } catch (err) {
+            vscode.window.showErrorMessage(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
+          break;
         default:
           break;
       }

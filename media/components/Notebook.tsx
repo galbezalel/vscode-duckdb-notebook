@@ -9,9 +9,10 @@ interface NotebookProps {
     onRunAndAdd: (id: string) => void;
     onUpdate: (id: string, data: Partial<CellData>) => void;
     onRemove: (id: string) => void;
+    onExport: (id: string, format: 'csv' | 'parquet') => void;
 }
 
-const Notebook: React.FC<NotebookProps> = ({ cells, focusId, onRun, onRunAndAdd, onUpdate, onRemove }) => {
+const Notebook: React.FC<NotebookProps> = ({ cells, focusId, onRun, onRunAndAdd, onUpdate, onRemove, onExport }) => {
     return (
         <div className="notebook">
             {cells.map((cell, index) => (
@@ -23,6 +24,7 @@ const Notebook: React.FC<NotebookProps> = ({ cells, focusId, onRun, onRunAndAdd,
                     onRunAndAdd={() => onRunAndAdd(cell.id)}
                     onUpdate={(updates) => onUpdate(cell.id, updates)}
                     onRemove={() => onRemove(cell.id)}
+                    onExport={(format) => onExport(cell.id, format)}
                     isLast={index === cells.length - 1}
                 />
             ))}

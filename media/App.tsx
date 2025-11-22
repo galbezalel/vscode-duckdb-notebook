@@ -99,6 +99,7 @@ const App: React.FC = () => {
             // For now, we can attach it to window or use a context.
             // Let's attach to window for simplicity in this migration.
             (window as any).duckdbConnection = conn;
+            (window as any).duckdbInstance = db;
 
             setFileInfo({ name, extension, virtualName });
             setDbReady(true);
@@ -235,6 +236,47 @@ const App: React.FC = () => {
         }
     };
 
+    const exportCell = async (id: string, format: 'csv' | 'parquet') => {
+        const cell = cells.find(c => c.id === id);
+        if (!cell || !dbReady) return;
+
+        try {
+            const conn = (window as any).duckdbConnection;
+            if (!conn) throw new Error("Database not connected");
+
+            const fileName = `export_${Date.now()}.${format}`;
+            const copyQuery = `COPY (${cell.query}) TO '${fileName}' (FORMAT ${format.toUpperCase()})`;
+
+            await conn.query(copyQuery);
+
+            // Read the file back from DuckDB WASM filesystem
+            // We need access to the DuckDB instance, not just connection
+            // But we can use the connection to read_blob if available, or register/read via db instance
+            // The db instance was local to initializeDuckDB. We should have saved it.
+            // Let's attach db to window as well.
+
+            const db = (window as any).duckdbInstance;
+            if (!db) throw new Error("Database instance not found");
+
+            const buffer = await db.copyFileToBuffer(fileName);
+
+            // Send to extension host
+            vscode.postMessage({
+                type: 'exportData',
+                data: buffer,
+                format,
+                defaultName: `result.${format}`
+            });
+
+            // Cleanup
+            await db.dropFile(fileName);
+
+        } catch (err: any) {
+            console.error("Export failed:", err);
+            setDbError("Export failed: " + err.message);
+        }
+    };
+
     if (dbError) {
         return <div className="error-screen">Failed to initialize DuckDB: {dbError}</div>;
     }
@@ -269,6 +311,7 @@ const App: React.FC = () => {
                     onRunAndAdd={runCellAndAdd}
                     onUpdate={updateCell}
                     onRemove={removeCell}
+                    onExport={exportCell}
                 />
             </main>
         </div>

@@ -6,99 +6,126 @@ interface ResultTableProps {
 }
 
 const ResultTable: React.FC<ResultTableProps> = ({ columns, rows }) => {
-    const tableRef = useRef<HTMLTableElement>(null);
+    const [colWidths, setColWidths] = React.useState<number[]>([]);
 
     useEffect(() => {
-        const table = tableRef.current;
-        if (!table) return;
+        // Initialize widths
+        setColWidths(new Array(columns.length).fill(150));
+    }, [columns]);
 
-        const headers = table.querySelectorAll('th');
-        headers.forEach((th, index) => {
-            // Clean up old listeners if any (though React handles DOM mostly)
-            // We'll attach fresh listeners
-
-            let startX: number;
-            let startWidth: number;
-
-            const onMouseMove = (e: MouseEvent) => {
-                const width = startWidth + (e.clientX - startX);
-                th.style.width = Math.max(50, width) + 'px';
-
-                // We don't strictly need to update cells if table-layout is fixed
-                // but for auto layout it helps.
-            };
-
-            const onMouseUp = () => {
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
-                document.body.style.cursor = '';
-                document.body.style.userSelect = '';
-            };
-
-            const onMouseDown = (e: MouseEvent) => {
-                const rect = th.getBoundingClientRect();
-                if (e.clientX > rect.right - 10) {
-                    startX = e.clientX;
-                    startWidth = th.offsetWidth;
-                    document.addEventListener('mousemove', onMouseMove);
-                    document.addEventListener('mouseup', onMouseUp);
-                    document.body.style.cursor = 'col-resize';
-                    document.body.style.userSelect = 'none';
-                    e.preventDefault();
-                }
-            };
-
-            th.addEventListener('mousedown', onMouseDown);
-
-            // Cursor hover effect
-            const onHover = (e: MouseEvent) => {
-                const rect = th.getBoundingClientRect();
-                th.style.cursor = e.clientX > rect.right - 10 ? 'col-resize' : 'default';
-            };
-            th.addEventListener('mousemove', onHover);
-
-            // Cleanup closure
-            (th as any)._cleanup = () => {
-                th.removeEventListener('mousedown', onMouseDown);
-                th.removeEventListener('mousemove', onHover);
-            };
+    const handleResize = (index: number, newWidth: number) => {
+        setColWidths(prev => {
+            const next = [...prev];
+            next[index] = Math.max(50, newWidth);
+            return next;
         });
-
-        return () => {
-            headers.forEach((th: any) => {
-                if (th._cleanup) th._cleanup();
-            });
-        };
-    }, [columns]); // Re-run if columns change
+    };
 
     if (!columns.length) {
         return <div className="muted">No results</div>;
     }
 
+    const totalWidth = colWidths.reduce((a, b) => a + b, 0);
+
     return (
-        <div className="table-container">
-            <table ref={tableRef}>
-                <thead>
-                    <tr>
-                        {columns.map((col, i) => (
-                            <th key={i}>{col}</th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map((row, i) => (
-                        <tr key={i}>
-                            {columns.map((col, j) => (
-                                <td key={j} title={String(row[col] ?? '')}>
-                                    {String(row[col] ?? '')}
-                                </td>
+        <div className="table-wrapper">
+            <div className="table-inner" style={{ minWidth: totalWidth }}>
+                <table className="header-table" style={{ width: totalWidth }}>
+                    <colgroup>
+                        {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            {columns.map((col, i) => (
+                                <HeaderCell
+                                    key={i}
+                                    label={col}
+                                    width={colWidths[i]}
+                                    onResize={(w) => handleResize(i, w)}
+                                />
                             ))}
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                </table>
+                <div className="body-scroll-container">
+                    <table className="body-table" style={{ width: totalWidth }}>
+                        <colgroup>
+                            {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
+                        </colgroup>
+                        <tbody>
+                            {rows.map((row, i) => (
+                                <tr key={i}>
+                                    {columns.map((col, j) => (
+                                        <td key={j} title={String(row[col] ?? '')}>
+                                            {String(row[col] ?? '')}
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     );
+};
+
+interface HeaderCellProps {
+    label: string;
+    width: number;
+    onResize: (width: number) => void;
+}
+
+const HeaderCell: React.FC<HeaderCellProps> = ({ label, width, onResize }) => {
+    const thRef = useRef<HTMLTableCellElement>(null);
+
+    useEffect(() => {
+        const th = thRef.current;
+        if (!th) return;
+
+        let startX: number;
+        let startWidth: number;
+
+        const onMouseMove = (e: MouseEvent) => {
+            const newWidth = startWidth + (e.clientX - startX);
+            onResize(newWidth);
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        };
+
+        const onMouseDown = (e: MouseEvent) => {
+            const rect = th.getBoundingClientRect();
+            if (e.clientX > rect.right - 10) {
+                startX = e.clientX;
+                startWidth = width;
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+            }
+        };
+
+        th.addEventListener('mousedown', onMouseDown);
+
+        const onHover = (e: MouseEvent) => {
+            const rect = th.getBoundingClientRect();
+            th.style.cursor = e.clientX > rect.right - 10 ? 'col-resize' : 'default';
+        };
+        th.addEventListener('mousemove', onHover);
+
+        return () => {
+            th.removeEventListener('mousedown', onMouseDown);
+            th.removeEventListener('mousemove', onHover);
+        };
+    }, [width, onResize]);
+
+    return <th ref={thRef}>{label}</th>;
 };
 
 export default ResultTable;

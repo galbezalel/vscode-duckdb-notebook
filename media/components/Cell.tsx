@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Trash2, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Play, Trash2, Clock, AlertCircle, CheckCircle2, Download, FileOutput } from 'lucide-react';
 import { CellData } from '../App';
 import SqlEditor from './SqlEditor';
 import ResultTable from './ResultTable';
@@ -11,10 +11,11 @@ interface CellProps {
     onRunAndAdd: () => void;
     onUpdate: (data: Partial<CellData>) => void;
     onRemove: () => void;
+    onExport: (format: 'csv' | 'parquet') => void;
     isLast: boolean;
 }
 
-const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onRunAndAdd, onUpdate, onRemove }) => {
+const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onRunAndAdd, onUpdate, onRemove, onExport }) => {
     return (
         <div className={`cell ${data.status}`}>
             <div className="cell-header">
@@ -29,6 +30,17 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onRunAndAdd, onUpda
                     </span>
                 </div>
                 <div className="cell-actions">
+                    {data.status === 'success' && (
+                        <>
+                            <button onClick={() => onExport('csv')} className="icon-btn" title="Export as CSV">
+                                <FileOutput size={14} />
+                            </button>
+                            <button onClick={() => onExport('parquet')} className="icon-btn" title="Export as Parquet">
+                                <Download size={14} />
+                            </button>
+                            <div className="divider" />
+                        </>
+                    )}
                     <button onClick={onRun} className="icon-btn run-btn" title="Run (Cmd+Enter)">
                         <Play size={14} />
                     </button>
