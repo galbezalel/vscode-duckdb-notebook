@@ -67,6 +67,7 @@ const App: React.FC = () => {
         try {
             const { name, extension, data } = message;
             const virtualName = `${name}-${Date.now()}`;
+            const escapedVirtualName = virtualName.replace(/'/g, "''");
 
             // Dynamic import to avoid bundling issues if not handled correctly, 
             // though esbuild should handle static imports fine.
@@ -107,8 +108,8 @@ const App: React.FC = () => {
             // Add initial cells and run them
             const tableName = 'data_table';
             const createViewQuery = extension.toLowerCase() === 'parquet'
-                ? `CREATE OR REPLACE VIEW ${tableName} AS SELECT * FROM read_parquet('${virtualName}');`
-                : `CREATE OR REPLACE VIEW ${tableName} AS SELECT * FROM read_csv_auto('${virtualName}');`;
+                ? `CREATE OR REPLACE VIEW ${tableName} AS SELECT * FROM read_parquet('${escapedVirtualName}');`
+                : `CREATE OR REPLACE VIEW ${tableName} AS SELECT * FROM read_csv_auto('${escapedVirtualName}', header=TRUE);`;
 
             const selectQuery = `SELECT * FROM ${tableName} LIMIT 100`;
 
