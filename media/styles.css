@@ -100,6 +100,7 @@ button.icon-btn:hover {
 .notebook-container {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 20px;
 }
 
@@ -108,6 +109,7 @@ button.icon-btn:hover {
   flex-direction: column;
   gap: 20px;
   max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
 }
 
@@ -116,9 +118,13 @@ button.icon-btn:hover {
   border: 1px solid var(--vscode-panel-border);
   border-radius: 6px;
   background-color: var(--vscode-editor-background);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .cell-header {
@@ -161,6 +167,9 @@ button.icon-btn:hover {
 
 .cell-results {
   padding: 0;
+  overflow-x: hidden;
+  min-width: 0;
+  width: 100%;
 }
 
 .cell-error {
@@ -184,6 +193,10 @@ button.icon-btn:hover {
   overflow-x: auto;
   border: 1px solid var(--vscode-panel-border);
   border-radius: 4px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .table-inner {
@@ -201,9 +214,18 @@ button.icon-btn:hover {
 }
 
 .body-scroll-container {
+  display: block;
+  width: 100%;
   overflow-y: auto;
+  overflow-x: hidden !important;
+  /* User requested fix */
   max-height: 550px;
   /* Approx 20 rows */
+}
+
+/* Hide WebKit scrollbar just in case */
+.body-scroll-container::-webkit-scrollbar:horizontal {
+  display: none;
 }
 
 th,

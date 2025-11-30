@@ -47,7 +47,7 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows }) => {
                         </tr>
                     </thead>
                 </table>
-                <div className="body-scroll-container">
+                <div className="body-scroll-container" style={{ overflowX: 'hidden' }}>
                     <table className="body-table" style={{ width: totalWidth }}>
                         <colgroup>
                             {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
