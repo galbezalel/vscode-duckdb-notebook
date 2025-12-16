@@ -14,9 +14,8 @@ export interface CellData {
 }
 
 export interface FileInfo {
-    name: string;
+    fileName: string;
     extension: string;
-    virtualName: string;
 }
 
 declare global {
@@ -65,13 +64,9 @@ const App: React.FC = () => {
 
     const initializeDuckDB = async (message: any) => {
         try {
-            const { name, extension, data } = message;
-            const virtualName = `${name}-${Date.now()}`;
-            const escapedVirtualName = virtualName.replace(/'/g, "''");
+            const { fileName, filePath, extension, data } = message;
 
-            // Dynamic import to avoid bundling issues if not handled correctly, 
-            // though esbuild should handle static imports fine.
-            // We'll use the global window.__duckdbPaths
+            // Dynamic import
             const duckdb = await import('@duckdb/duckdb-wasm');
             const paths = window.__duckdbPaths;
 
@@ -92,60 +87,105 @@ const App: React.FC = () => {
 
             const conn = await db.connect();
 
-            // Register file
-            const buffer = new Uint8Array(message.data);
-            await db.registerFileBuffer(virtualName, buffer);
-
-            // Save connection globally or in a way accessible to cells
-            // For now, we can attach it to window or use a context.
-            // Let's attach to window for simplicity in this migration.
+            // Store db instance globally
             (window as any).duckdbConnection = conn;
             (window as any).duckdbInstance = db;
 
-            setFileInfo({ name, extension, virtualName });
+            // Register the file using its original path to allow "read_...('path')"
+            // Note: DuckDB WASM virtual FS handles basic paths.
+            await db.registerFileBuffer(filePath, new Uint8Array(data));
+
+            const tableName = 'data';
+            const ext = extension.toLowerCase();
+            let readCommand = '';
+
+            // Construct read command based on extension
+            if (ext === '.parquet') {
+                readCommand = `read_parquet('${filePath}')`;
+            } else {
+                // assume CSV
+                readCommand = `read_csv_auto('${filePath}')`;
+            }
+
+            // Cell 1: Setup & Load
+            const cell1Id = `cell-${Date.now()}`;
+            const setupQuery = [
+
+                `CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM ${readCommand};`,
+                `-- COPY ${tableName} TO '${fileName}_backup.parquet';`
+            ].join('\n');
+
+            // Cell 2: Structure
+            const cell2Id = `cell-${Date.now() + 1}`;
+            const structureQuery = `DESCRIBE ${tableName};`;
+
+            // Cell 3: Preview
+            const cell3Id = `cell-${Date.now() + 2}`;
+            const previewQuery = `SELECT * FROM ${tableName} LIMIT 5;`;
+
+            // Cell 4: Empty
+            const cell4Id = `cell-${Date.now() + 3}`;
+
+            const initialCells: CellData[] = [
+                { id: cell1Id, query: setupQuery, status: 'idle' },
+                { id: cell2Id, query: structureQuery, status: 'idle' },
+                { id: cell3Id, query: previewQuery, status: 'idle' },
+                { id: cell4Id, query: '', status: 'idle' }
+            ];
+
+            setCells(initialCells);
+            setFocusId(cell4Id);
+            setFileInfo({ fileName, extension });
             setDbReady(true);
 
-            // Add initial cells and run them
-            const tableName = 'data_table';
-            const createViewQuery = extension.toLowerCase() === 'parquet'
-                ? `CREATE OR REPLACE VIEW ${tableName} AS SELECT * FROM read_parquet('${escapedVirtualName}');`
-                : `CREATE OR REPLACE VIEW ${tableName} AS SELECT * FROM read_csv_auto('${escapedVirtualName}', header=TRUE);`;
+            // Execute Chain
+            // 1. Setup
+            let cell1State: Partial<CellData> = { status: 'running' };
+            setCells(prev => prev.map(c => c.id === cell1Id ? { ...c, ...cell1State } : c));
 
-            const selectQuery = `SELECT * FROM ${tableName} LIMIT 100`;
+            try {
+                const s1 = performance.now();
+                await conn.query(setupQuery);
+                cell1State = { status: 'success', executionTime: performance.now() - s1 };
+            } catch (e: any) {
+                cell1State = { status: 'error', error: e.message };
+            }
 
-            // Execute Create View
-            await conn.query(createViewQuery);
+            // Update Cell 1 Result
+            setCells(prev => prev.map(c => c.id === cell1Id ? { ...c, ...cell1State } : c));
 
-            // Execute Select
-            const result = await conn.query(selectQuery);
-            const rows = result.toArray().map((row: any) => row.toJSON());
-            const columns = result.schema.fields.map((f: any) => f.name);
+            if (cell1State.status !== 'success') return; // Stop if setup failed
 
-            const cell3Id = `cell-${Date.now()}`;
+            // 2. Structure
+            let cell2State: Partial<CellData> = { status: 'running' };
+            setCells(prev => prev.map(c => c.id === cell2Id ? { ...c, ...cell2State } : c));
 
-            setCells([
-                {
-                    id: 'cell-1',
-                    query: createViewQuery,
-                    status: 'success',
-                    executionTime: 0 // Approximate
-                },
-                {
-                    id: 'cell-2',
-                    query: selectQuery,
-                    status: 'success',
-                    rows,
-                    columns,
-                    executionTime: 0
-                },
-                {
-                    id: cell3Id,
-                    query: '',
-                    status: 'idle'
-                }
-            ]);
+            try {
+                const s2 = performance.now();
+                const res = await conn.query(structureQuery);
+                const rows = res.toArray().map((r: any) => r.toJSON());
+                const columns = res.schema.fields.map((f: any) => f.name);
+                cell2State = { status: 'success', rows, columns, executionTime: performance.now() - s2 };
+            } catch (e: any) {
+                cell2State = { status: 'error', error: e.message };
+            }
+            setCells(prev => prev.map(c => c.id === cell2Id ? { ...c, ...cell2State } : c));
 
-            setFocusId(cell3Id);
+            // 3. Preview
+            let cell3State: Partial<CellData> = { status: 'running' };
+            setCells(prev => prev.map(c => c.id === cell3Id ? { ...c, ...cell3State } : c));
+
+            try {
+                const s3 = performance.now();
+                const res = await conn.query(previewQuery);
+                const rows = res.toArray().map((r: any) => r.toJSON());
+                const columns = res.schema.fields.map((f: any) => f.name);
+                cell3State = { status: 'success', rows, columns, executionTime: performance.now() - s3 };
+            } catch (e: any) {
+                cell3State = { status: 'error', error: e.message };
+            }
+            setCells(prev => prev.map(c => c.id === cell3Id ? { ...c, ...cell3State } : c));
+
 
         } catch (err: any) {
             console.error(err);
@@ -154,13 +194,22 @@ const App: React.FC = () => {
     };
 
 
-    const addCell = () => {
+    const addCell = (index?: number) => {
         const newId = `cell-${Date.now()}`;
-        setCells(prev => [...prev, {
+        const newCell: CellData = {
             id: newId,
             query: '',
             status: 'idle'
-        }]);
+        };
+
+        setCells(prev => {
+            if (index !== undefined) {
+                const newCells = [...prev];
+                newCells.splice(index, 0, newCell);
+                return newCells;
+            }
+            return [...prev, newCell];
+        });
         setFocusId(newId);
     };
 
@@ -278,6 +327,10 @@ const App: React.FC = () => {
         }
     };
 
+    const handleOpenUrl = (url: string) => {
+        vscode.postMessage({ type: 'openUrl', url });
+    };
+
     if (dbError) {
         return <div className="error-screen">Failed to initialize DuckDB: {dbError}</div>;
     }
@@ -290,7 +343,7 @@ const App: React.FC = () => {
         <div className="app-container">
             <header className="toolbar">
                 <div className="file-info">
-                    <span className="file-name">{fileInfo?.name}</span>
+                    <span className="file-name">{fileInfo?.fileName}</span>
                     <span className="badge">DuckDB</span>
                 </div>
                 <div className="actions">
@@ -298,7 +351,7 @@ const App: React.FC = () => {
                         <RefreshCw size={16} />
                         <span>Reload</span>
                     </button>
-                    <button onClick={addCell} className="primary">
+                    <button onClick={() => addCell()} className="primary">
                         <Plus size={16} />
                         <span>New Cell</span>
                     </button>
@@ -313,6 +366,8 @@ const App: React.FC = () => {
                     onUpdate={updateCell}
                     onRemove={removeCell}
                     onExport={exportCell}
+                    onOpenUrl={handleOpenUrl}
+                    onAdd={addCell}
                 />
             </main>
         </div>

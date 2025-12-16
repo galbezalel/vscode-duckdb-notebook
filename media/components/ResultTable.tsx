@@ -3,20 +3,48 @@ import React, { useEffect, useRef } from 'react';
 interface ResultTableProps {
     columns: string[];
     rows: any[];
+    onOpenUrl: (url: string) => void;
 }
 
-const ResultTable: React.FC<ResultTableProps> = ({ columns, rows }) => {
+const isUrl = (text: string): boolean => {
+    // Simple regex for URL detection
+    return /^https?:\/\/\S+$/.test(text);
+};
+
+const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl }) => {
     const [colWidths, setColWidths] = React.useState<number[]>([]);
 
+    const calculateColumnWidths = (cols: string[], data: any[]) => {
+        const MIN_WIDTH = 100;
+        const MAX_WIDTH = 500;
+        const AVG_CHAR_WIDTH = 8.5; // Approximation for font width
+        const PADDING = 24; // 10px padding left/right + border
+
+        return cols.map(col => {
+            // Check header length
+            let maxLen = col.length;
+
+            // Check first 10 rows
+            const sampleSize = Math.min(data.length, 10);
+            for (let i = 0; i < sampleSize; i++) {
+                const val = String(data[i][col] ?? '');
+                if (val.length > maxLen) maxLen = val.length;
+            }
+
+            const estimatedWidth = (maxLen * AVG_CHAR_WIDTH) + PADDING;
+            return Math.min(Math.max(estimatedWidth, MIN_WIDTH), MAX_WIDTH);
+        });
+    };
+
     useEffect(() => {
-        // Initialize widths
-        setColWidths(new Array(columns.length).fill(150));
-    }, [columns]);
+        // Initialize widths based on content
+        setColWidths(calculateColumnWidths(columns, rows));
+    }, [columns, rows]);
 
     const handleResize = (index: number, newWidth: number) => {
         setColWidths(prev => {
             const next = [...prev];
-            next[index] = Math.max(50, newWidth);
+            next[index] = Math.max(100, newWidth); // Enforce min width of 100px
             return next;
         });
     };
@@ -55,11 +83,28 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows }) => {
                         <tbody>
                             {rows.map((row, i) => (
                                 <tr key={i}>
-                                    {columns.map((col, j) => (
-                                        <td key={j} title={String(row[col] ?? '')}>
-                                            {String(row[col] ?? '')}
-                                        </td>
-                                    ))}
+                                    {columns.map((col, j) => {
+                                        const cellValue = String(row[col] ?? '').trim();
+                                        const isCellUrl = isUrl(cellValue);
+                                        return (
+                                            <td key={j} title={cellValue}>
+                                                {isCellUrl ? (
+                                                    <a
+                                                        href={cellValue}
+                                                        className="table-link"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            onOpenUrl(cellValue);
+                                                        }}
+                                                    >
+                                                        {cellValue}
+                                                    </a>
+                                                ) : (
+                                                    cellValue
+                                                )}
+                                            </td>
+                                        );
+                                    })}
                                 </tr>
                             ))}
                         </tbody>

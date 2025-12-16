@@ -48,7 +48,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./ && node build-webview.mjs",
     "build-webview": "node build-webview.mjs",
-    "watch": "tsc -watch -p ./",
+    "watch": "tsc -watch -p ./ & node build-webview.mjs --watch",
     "package": "vsce package"
   },
   "devDependencies": {
@@ -69,6 +69,7 @@
     "codemirror": "^6.0.2",
     "lucide-react": "^0.554.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "xlsx": "^0.18.5"
   }
 }

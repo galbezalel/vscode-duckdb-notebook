@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 
+
 class DataDocument implements vscode.CustomDocument {
   constructor(public readonly uri: vscode.Uri) { }
   dispose(): void {
@@ -40,6 +41,8 @@ class DuckDBViewerProvider
       },
     );
 
+
+
     return vscode.Disposable.from(csv, parquet);
   }
 
@@ -75,21 +78,25 @@ class DuckDBViewerProvider
 
     const pushDataToWebview = async () => {
       try {
+        const fileExtension = path.extname(document.uri.fsPath).toLowerCase();
         const raw = await vscode.workspace.fs.readFile(document.uri);
-        const fileExtension = path.extname(document.uri.fsPath).replace(".", "");
-        // Create a standalone buffer for transfer; Buffer may have a larger underlying ArrayBuffer.
+        const fileName = path.basename(document.uri.fsPath, fileExtension).replace(/\s+/g, '_');
+        const filePath = document.uri.fsPath;
+
+        // Create a standalone buffer for transfer
         const buffer = raw.buffer.slice(
           raw.byteOffset,
           raw.byteOffset + raw.byteLength,
         );
+
         webview.postMessage({
           type: "loadData",
-          name: path.basename(document.uri.fsPath),
-          extension: fileExtension || "csv",
-          // Send raw bytes (ArrayBuffer) to avoid large base64 strings causing errors in the webview.
-          data: buffer,
-          byteLength: raw.byteLength,
+          fileName,
+          filePath,
+          extension: fileExtension,
+          data: buffer
         });
+
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Failed to read file content.";
@@ -130,6 +137,11 @@ class DuckDBViewerProvider
             }
           } catch (err) {
             vscode.window.showErrorMessage(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
+          break;
+        case "openUrl":
+          if (message.url) {
+            vscode.env.openExternal(vscode.Uri.parse(message.url));
           }
           break;
         default:
