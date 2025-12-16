@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as vscode from "vscode";
+import * as xlsx from "xlsx";
 
 class DataDocument implements vscode.CustomDocument {
   constructor(public readonly uri: vscode.Uri) { }
@@ -40,7 +41,18 @@ class DuckDBViewerProvider
       },
     );
 
-    return vscode.Disposable.from(csv, parquet);
+    const excel = vscode.window.registerCustomEditorProvider(
+      "duckdb.excelViewer",
+      provider,
+      {
+        webviewOptions: {
+          retainContextWhenHidden,
+        },
+        supportsMultipleEditorsPerDocument: false,
+      },
+    );
+
+    return vscode.Disposable.from(csv, parquet, excel);
   }
 
   private readonly extensionUri: vscode.Uri;
@@ -75,21 +87,49 @@ class DuckDBViewerProvider
 
     const pushDataToWebview = async () => {
       try {
+        const fileExtension = path.extname(document.uri.fsPath).toLowerCase();
         const raw = await vscode.workspace.fs.readFile(document.uri);
-        const fileExtension = path.extname(document.uri.fsPath).replace(".", "");
-        // Create a standalone buffer for transfer; Buffer may have a larger underlying ArrayBuffer.
-        const buffer = raw.buffer.slice(
-          raw.byteOffset,
-          raw.byteOffset + raw.byteLength,
-        );
-        webview.postMessage({
-          type: "loadData",
-          name: path.basename(document.uri.fsPath),
-          extension: fileExtension || "csv",
-          // Send raw bytes (ArrayBuffer) to avoid large base64 strings causing errors in the webview.
-          data: buffer,
-          byteLength: raw.byteLength,
-        });
+        const fileName = path.basename(document.uri.fsPath, fileExtension).replace(/\s+/g, '_');
+
+        if (fileExtension === '.xls' || fileExtension === '.xlsx') {
+          // Parse Excel - just to get sheet names
+          const workbook = xlsx.read(raw);
+          const sheetNames = workbook.SheetNames.map(name => name.replace(/\s+/g, '_'));
+
+          // Create a standalone buffer for transfer
+          const buffer = raw.buffer.slice(
+            raw.byteOffset,
+            raw.byteOffset + raw.byteLength,
+          );
+
+          webview.postMessage({
+            type: "loadData",
+            fileName,
+            extension: fileExtension.replace('.', ''),
+            format: 'excel',
+            sheets: sheetNames,
+            data: buffer,
+            originalSheetNames: workbook.SheetNames
+          });
+
+        } else {
+          // CSV or Parquet
+          // Create a standalone buffer for transfer; Buffer may have a larger underlying ArrayBuffer.
+          const buffer = raw.buffer.slice(
+            raw.byteOffset,
+            raw.byteOffset + raw.byteLength,
+          );
+
+          webview.postMessage({
+            type: "loadData",
+            fileName,
+            extension: fileExtension.replace('.', ''),
+            format: fileExtension === '.parquet' ? 'parquet' : 'csv',
+            data: buffer,
+            byteLength: raw.byteLength,
+          });
+        }
+
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Failed to read file content.";
@@ -130,6 +170,11 @@ class DuckDBViewerProvider
             }
           } catch (err) {
             vscode.window.showErrorMessage(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
+          break;
+        case "openUrl":
+          if (message.url) {
+            vscode.env.openExternal(vscode.Uri.parse(message.url));
           }
           break;
         default:

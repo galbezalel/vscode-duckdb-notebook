@@ -12,10 +12,11 @@ interface CellProps {
     onUpdate: (data: Partial<CellData>) => void;
     onRemove: () => void;
     onExport: (format: 'csv' | 'parquet') => void;
+    onOpenUrl: (url: string) => void;
     isLast: boolean;
 }
 
-const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onRunAndAdd, onUpdate, onRemove, onExport }) => {
+const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onRunAndAdd, onUpdate, onRemove, onExport, onOpenUrl }) => {
     return (
         <div className={`cell ${data.status}`}>
             <div className="cell-header">
@@ -32,11 +33,13 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onRunAndAdd, onUpda
                 <div className="cell-actions">
                     {data.status === 'success' && (
                         <>
-                            <button onClick={() => onExport('csv')} className="icon-btn" title="Export as CSV">
+                            <button onClick={() => onExport('csv')} title="Export as CSV">
                                 <FileOutput size={14} />
+                                <span>.csv</span>
                             </button>
-                            <button onClick={() => onExport('parquet')} className="icon-btn" title="Export as Parquet">
+                            <button onClick={() => onExport('parquet')} title="Export as Parquet">
                                 <Download size={14} />
+                                <span>.parquet</span>
                             </button>
                             <div className="divider" />
                         </>
@@ -60,19 +63,23 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onRunAndAdd, onUpda
                 />
             </div>
 
-            {data.error && (
-                <div className="cell-error">
-                    <AlertCircle size={16} />
-                    <pre>{data.error}</pre>
-                </div>
-            )}
+            {
+                data.error && (
+                    <div className="cell-error">
+                        <AlertCircle size={16} />
+                        <pre>{data.error}</pre>
+                    </div>
+                )
+            }
 
-            {data.status === 'success' && data.columns && (
-                <div className="cell-results">
-                    <ResultTable columns={data.columns} rows={data.rows || []} />
-                </div>
-            )}
-        </div>
+            {
+                data.status === 'success' && data.columns && (
+                    <div className="cell-results">
+                        <ResultTable columns={data.columns} rows={data.rows || []} onOpenUrl={onOpenUrl} />
+                    </div>
+                )
+            }
+        </div >
     );
 };
 
