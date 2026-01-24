@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { X, ChevronRight, ChevronDown } from 'lucide-react';
 
 interface ResultTableProps {
     columns: string[];
@@ -11,8 +12,85 @@ const isUrl = (text: string): boolean => {
     return /^https?:\/\/\S+$/.test(text);
 };
 
+// --- JSON Tree Viewer Component ---
+
+interface JsonTreeProps {
+    data: any;
+    label?: string;
+    expandAll?: boolean;
+}
+
+const JsonTree: React.FC<JsonTreeProps> = ({ data, label, expandAll = false }) => {
+    const [expanded, setExpanded] = useState(expandAll);
+    const isObject = data !== null && typeof data === 'object';
+    const isArray = Array.isArray(data);
+    const isEmpty = isObject && Object.keys(data).length === 0;
+
+    const toggleExpand = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setExpanded(!expanded);
+    };
+
+    if (!isObject) {
+        let valClass = '';
+        if (typeof data === 'string') valClass = 'json-string';
+        else if (typeof data === 'number') valClass = 'json-number';
+        else if (typeof data === 'boolean') valClass = 'json-boolean';
+        else if (data === null) valClass = 'json-null';
+
+        const displayValue = data === null ? 'null' : String(data);
+        const quotedValue = typeof data === 'string' ? `"${displayValue}"` : displayValue;
+
+        return (
+            <div className="json-leaf">
+                {label && <span className="json-key">{label}: </span>}
+                <span className={`json-value ${valClass}`}>{quotedValue}</span>
+            </div>
+        );
+    }
+
+    if (isEmpty) {
+        return (
+            <div className="json-leaf">
+                {label && <span className="json-key">{label}: </span>}
+                <span className="json-value strip">{isArray ? '[]' : '{}'}</span>
+            </div>
+        );
+    }
+
+    const keys = Object.keys(data);
+    const itemLabel = isArray ? `Array(${keys.length})` : '{...}';
+
+    return (
+        <div className="json-node">
+            <div className="json-node-header" onClick={toggleExpand}>
+                <span className="toggle-icon">
+                    {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                </span>
+                {label && <span className="json-key">{label}: </span>}
+                <span className="json-preview">{!expanded && itemLabel}</span>
+            </div>
+            {expanded && (
+                <div className="json-children">
+                    {keys.map(key => (
+                        <JsonTree
+                            key={key}
+                            data={data[key]}
+                            label={isArray ? undefined : key} // Don't show index keys for arrays usually, creates noise. Or maybe we should? Let's show indices if array.
+                        // Actually showing index for list items is good for tracking.
+                        // But usually arrays are just list of values.
+                        // Let's decide: if array, show index.
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
 const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl }) => {
-    const [colWidths, setColWidths] = React.useState<number[]>([]);
+    const [colWidths, setColWidths] = useState<number[]>([]);
+    const [selectedData, setSelectedData] = useState<any | null>(null);
 
     const calculateColumnWidths = (cols: string[], data: any[]) => {
         const MIN_WIDTH = 100;
@@ -27,8 +105,17 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl }) =
             // Check first 10 rows
             const sampleSize = Math.min(data.length, 10);
             for (let i = 0; i < sampleSize; i++) {
-                const val = String(data[i][col] ?? '');
-                if (val.length > maxLen) maxLen = val.length;
+                const val = data[i][col];
+                let len = 0;
+                if (val !== null && typeof val === 'object') {
+                    // For objects/arrays, we display a placeholder or JSON string rep
+                    // Use a rough estimate or fixed width for complexity
+                    len = 20; // "[Object]" or "{...}"
+                } else {
+                    len = String(val ?? '').length;
+                }
+
+                if (len > maxLen) maxLen = len;
             }
 
             const estimatedWidth = (maxLen * AVG_CHAR_WIDTH) + PADDING;
@@ -55,70 +142,131 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl }) =
 
     const totalWidth = colWidths.reduce((a, b) => a + b, 0);
 
+    // Helper to safely parse JSON if it's a string
+    const getObjectValue = (val: any) => {
+        if (val === null) return null;
+        if (typeof val === 'object') return val;
+
+        // Try parsing string if it looks like JSON
+        if (typeof val === 'string') {
+            const trimmed = val.trim();
+            if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+                (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                try {
+                    return JSON.parse(val);
+                } catch {
+                    return null;
+                }
+            }
+        }
+        return null;
+    };
+
     return (
-        <div className="table-wrapper">
-            <div className="table-inner" style={{ minWidth: totalWidth }}>
-                <table className="header-table" style={{ width: totalWidth }}>
-                    <colgroup>
-                        {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            {columns.map((col, i) => (
-                                <HeaderCell
-                                    key={i}
-                                    label={col}
-                                    width={colWidths[i]}
-                                    onResize={(w) => handleResize(i, w)}
-                                />
-                            ))}
-                        </tr>
-                    </thead>
-                </table>
-                <div className="body-scroll-container" style={{ overflowX: 'hidden' }}>
-                    <table className="body-table" style={{ width: totalWidth }}>
+        <div className="table-result-container" style={{ position: 'relative' }}>
+            {selectedData && (
+                <div className="json-drawer">
+                    <div className="json-drawer-header">
+                        <span className="drawer-title">JSON Viewer</span>
+                        <button className="icon-btn" onClick={() => setSelectedData(null)}>
+                            <X size={16} />
+                        </button>
+                    </div>
+                    <div className="json-drawer-content">
+                        <JsonTree data={selectedData} expandAll={true} />
+                    </div>
+                </div>
+            )}
+
+            <div className="table-wrapper">
+                <div className="table-inner" style={{ minWidth: totalWidth }}>
+                    <table className="header-table" style={{ width: totalWidth }}>
                         <colgroup>
                             {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
                         </colgroup>
-                        <tbody>
-                            {rows.map((row, i) => (
-                                <tr key={i}>
-                                    {columns.map((col, j) => {
-                                        const rawValue = row[col];
-                                        // Explicit check for null (DuckDB returns null for SQL NULL)
-                                        if (rawValue === null) {
+                        <thead>
+                            <tr>
+                                {columns.map((col, i) => (
+                                    <HeaderCell
+                                        key={i}
+                                        label={col}
+                                        width={colWidths[i]}
+                                        onResize={(w) => handleResize(i, w)}
+                                    />
+                                ))}
+                            </tr>
+                        </thead>
+                    </table>
+                    <div className="body-scroll-container" style={{ overflowX: 'hidden' }}>
+                        <table className="body-table" style={{ width: totalWidth }}>
+                            <colgroup>
+                                {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
+                            </colgroup>
+                            <tbody>
+                                {rows.map((row, i) => (
+                                    <tr key={i}>
+                                        {columns.map((col, j) => {
+                                            const rawValue = row[col];
+
+                                            // Explicit check for null
+                                            if (rawValue === null) {
+                                                return (
+                                                    <td key={j} title="NULL">
+                                                        <span className="null-value">NULL</span>
+                                                    </td>
+                                                );
+                                            }
+
+                                            // Check for Object/Array (nested data) or JSON-like string
+                                            const objectValue = getObjectValue(rawValue);
+
+                                            if (objectValue) {
+                                                const isArray = Array.isArray(objectValue);
+                                                const display = isArray ? `Array(${objectValue.length})` : '{...}';
+
+                                                return (
+                                                    <td
+                                                        key={j}
+                                                        title="Click to view JSON"
+                                                        className="clickable-cell"
+                                                        onClick={() => setSelectedData(JSON.parse(JSON.stringify(objectValue)))}
+                                                    >
+                                                        <div className="json-cell-content">
+                                                            <span className="json-badge">{display}</span>
+                                                            <span className="json-snippet">
+                                                                {typeof rawValue === 'string' ? rawValue : JSON.stringify(rawValue).slice(0, 50)}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                );
+                                            }
+
+                                            const cellValue = String(rawValue ?? '').trim();
+                                            const isCellUrl = isUrl(cellValue);
                                             return (
-                                                <td key={j} title="NULL">
-                                                    <span className="null-value">NULL</span>
+                                                <td key={j} title={cellValue}>
+                                                    {isCellUrl ? (
+                                                        <a
+                                                            href={cellValue}
+                                                            className="table-link"
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                onOpenUrl(cellValue);
+                                                            }}
+                                                        >
+                                                            {cellValue}
+                                                        </a>
+                                                    ) : (
+                                                        cellValue
+                                                    )}
                                                 </td>
                                             );
-                                        }
-
-                                        const cellValue = String(rawValue ?? '').trim();
-                                        const isCellUrl = isUrl(cellValue);
-                                        return (
-                                            <td key={j} title={cellValue}>
-                                                {isCellUrl ? (
-                                                    <a
-                                                        href={cellValue}
-                                                        className="table-link"
-                                                        onClick={(e) => {
-                                                            e.preventDefault();
-                                                            onOpenUrl(cellValue);
-                                                        }}
-                                                    >
-                                                        {cellValue}
-                                                    </a>
-                                                ) : (
-                                                    cellValue
-                                                )}
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                                        })}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
