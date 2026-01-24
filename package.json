@@ -2,8 +2,8 @@
   "name": "vscode-duckdb-notebook",
   "displayName": "DuckDB Notebook",
   "description": "Open CSV and Parquet files with a DuckDB-backed Notebook interface.",
-  "version": "0.0.1",
-  "publisher": "galbezalel",
+  "version": "0.0.2",
+  "publisher": "galbez",
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
