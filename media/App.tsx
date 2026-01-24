@@ -295,7 +295,8 @@ const App: React.FC = () => {
             if (!conn) throw new Error("Database not connected");
 
             const fileName = `export_${Date.now()}.${format}`;
-            const copyQuery = `COPY (${cell.query}) TO '${fileName}' (FORMAT ${format.toUpperCase()})`;
+            const cleanQuery = cell.query.trim().replace(/;$/, '');
+            const copyQuery = `COPY (${cleanQuery}) TO '${fileName}' (FORMAT ${format.toUpperCase()})`;
 
             await conn.query(copyQuery);
 
@@ -324,6 +325,42 @@ const App: React.FC = () => {
         } catch (err: any) {
             console.error("Export failed:", err);
             setDbError("Export failed: " + err.message);
+        }
+    };
+
+    const copyCell = async (id: string,) => {
+        const cell = cells.find(c => c.id === id);
+        if (!cell || !cell.columns || !cell.rows) return;
+
+        try {
+            const escapeCsvValue = (val: any): string => {
+                if (val === null || val === undefined) return '';
+                let str = String(val);
+                if (typeof val === 'object') {
+                    try { str = JSON.stringify(val); } catch { }
+                }
+
+                if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+                    return `"${str.replace(/"/g, '""')}"`;
+                }
+                return str;
+            };
+
+            const header = cell.columns.map(escapeCsvValue).join(',');
+            const body = cell.rows.map(row => {
+                return cell.columns!.map(col => escapeCsvValue(row[col])).join(',');
+            }).join('\n');
+
+            const text = header + '\n' + body;
+
+            // Send to extension host
+            vscode.postMessage({
+                type: 'copyToClipboard',
+                value: text
+            });
+        } catch (err: any) {
+            console.error("Copy failed:", err);
+            setDbError("Copy failed: " + err.message);
         }
     };
 
@@ -367,6 +404,7 @@ const App: React.FC = () => {
                     onRemove={removeCell}
                     onExport={exportCell}
                     onOpenUrl={handleOpenUrl}
+                    onCopy={copyCell}
                     onAdd={addCell}
                 />
             </main>

@@ -12,11 +12,12 @@ interface NotebookProps {
     onUpdate: (id: string, data: Partial<CellData>) => void;
     onRemove: (id: string) => void;
     onExport: (id: string, format: 'csv' | 'parquet') => void;
+    onCopy: (id: string) => void;
     onOpenUrl: (url: string) => void;
     onAdd: (index: number) => void;
 }
 
-const Notebook: React.FC<NotebookProps> = ({ cells, focusId, onRun, onRunAndAdd, onUpdate, onRemove, onExport, onOpenUrl, onAdd }) => {
+const Notebook: React.FC<NotebookProps> = ({ cells, focusId, onRun, onRunAndAdd, onUpdate, onRemove, onExport, onCopy, onOpenUrl, onAdd }) => {
     return (
         <div className="notebook">
             {cells.map((cell, index) => (
@@ -29,6 +30,7 @@ const Notebook: React.FC<NotebookProps> = ({ cells, focusId, onRun, onRunAndAdd,
                         onUpdate={(updates) => onUpdate(cell.id, updates)}
                         onRemove={() => onRemove(cell.id)}
                         onExport={(format) => onExport(cell.id, format)}
+                        onCopy={() => onCopy(cell.id)}
                         onOpenUrl={onOpenUrl}
                         isLast={index === cells.length - 1}
                     />

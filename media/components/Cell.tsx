@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Trash2, Clock, AlertCircle, CheckCircle2, Download, FileOutput } from 'lucide-react';
+import { Play, Trash2, Clock, AlertCircle, CheckCircle2, Download, FileOutput, Copy } from 'lucide-react';
 import { CellData } from '../App';
 import SqlEditor from './SqlEditor';
 import ResultTable from './ResultTable';
@@ -12,11 +12,12 @@ interface CellProps {
     onUpdate: (data: Partial<CellData>) => void;
     onRemove: () => void;
     onExport: (format: 'csv' | 'parquet') => void;
+    onCopy: () => void;
     onOpenUrl: (url: string) => void;
     isLast: boolean;
 }
 
-const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onRunAndAdd, onUpdate, onRemove, onExport, onOpenUrl }) => {
+const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onRunAndAdd, onUpdate, onRemove, onExport, onCopy, onOpenUrl }) => {
     return (
         <div className={`cell ${data.status}`}>
             <div className="cell-header">
@@ -40,6 +41,10 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onRunAndAdd, onUpda
                             <button onClick={() => onExport('parquet')} title="Export as Parquet">
                                 <Download size={14} />
                                 <span>.parquet</span>
+                            </button>
+                            <button onClick={onCopy} title="Copy as CSV">
+                                <Copy size={14} />
+                                <span>copy</span>
                             </button>
                             <div className="divider" />
                         </>
