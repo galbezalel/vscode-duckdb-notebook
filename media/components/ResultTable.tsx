@@ -84,7 +84,17 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl }) =
                             {rows.map((row, i) => (
                                 <tr key={i}>
                                     {columns.map((col, j) => {
-                                        const cellValue = String(row[col] ?? '').trim();
+                                        const rawValue = row[col];
+                                        // Explicit check for null (DuckDB returns null for SQL NULL)
+                                        if (rawValue === null) {
+                                            return (
+                                                <td key={j} title="NULL">
+                                                    <span className="null-value">NULL</span>
+                                                </td>
+                                            );
+                                        }
+
+                                        const cellValue = String(rawValue ?? '').trim();
                                         const isCellUrl = isUrl(cellValue);
                                         return (
                                             <td key={j} title={cellValue}>

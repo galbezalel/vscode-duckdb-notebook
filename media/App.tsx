@@ -104,7 +104,7 @@ const App: React.FC = () => {
                 readCommand = `read_parquet('${filePath}')`;
             } else {
                 // assume CSV
-                readCommand = `read_csv_auto('${filePath}')`;
+                readCommand = `read_csv_auto('${filePath}', allow_quoted_nulls=false, header=true)`;
             }
 
             // Cell 1: Setup & Load
