@@ -47,6 +47,7 @@ class DuckDBViewerProvider
   }
 
   private readonly extensionUri: vscode.Uri;
+  private _fileWriteQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.extensionUri = context.extensionUri;
@@ -169,58 +170,65 @@ class DuckDBViewerProvider
           }
           break;
         case "saveFileStart":
-          try {
-            const { name } = message;
-            const targetUri = this.resolveTargetUri(name, document.uri);
-            // Create/overwrite with empty content
-            await vscode.workspace.fs.writeFile(targetUri, new Uint8Array(0));
-          } catch (err) {
-            vscode.window.showErrorMessage(`Failed to start saving file: ${err instanceof Error ? err.message : String(err)}`);
-          }
+          this._fileWriteQueue = this._fileWriteQueue.then(async () => {
+            try {
+              const { name } = message;
+              const targetUri = this.resolveTargetUri(name, document.uri);
+              console.log(`[DuckDB] saveFileStart: ${name} -> ${targetUri.fsPath}`);
+              // Create/overwrite with empty content
+              await vscode.workspace.fs.writeFile(targetUri, new Uint8Array(0));
+            } catch (err) {
+              vscode.window.showErrorMessage(`Failed to start saving file: ${err instanceof Error ? err.message : String(err)}`);
+            }
+          });
           break;
 
         case "saveFileChunk":
-          try {
-            const { name, data } = message;
-            const buffer = new Uint8Array(data);
+          this._fileWriteQueue = this._fileWriteQueue.then(async () => {
+            try {
+              const { name, data } = message;
+              const buffer = new Uint8Array(data);
+              const targetUri = this.resolveTargetUri(name, document.uri);
+              console.log(`[DuckDB] saveFileChunk: ${name}, size=${buffer.length}`);
 
-            const targetUri = this.resolveTargetUri(name, document.uri);
+              // Read existing, append, write back.
+              // Note: vscode.fs doesn't support appendStream easily for webviews/remote, 
+              // but for local files this is less efficient than Node's fs.appendFile. 
+              // However, to keep it generic for VS Code FS API (which might be remote):
+              // We'll read the file, concat, and write. 
+              // Wait, reading 50MB to append 1MB is bad.
+              // Optimization: If scheme is file, use fs.appendFile directly if possible? 
+              // extensionHost runs in Node.
+              // Let's use standard fs for local files if possible, or VS Code API with read-modify-write as fallback.
+              // Actually, for simplicity and safety across remote:
+              // Regrettably, VS Code API has no append.
+              // But we can use workspace.fs.readFile, then concat. 
+              // Correct approach for large files in VS Code API: likely not optimal.
+              // But if we are in a local workspace, we can use `fs`.
 
-            // Read existing, append, write back.
-            // Note: vscode.fs doesn't support appendStream easily for webviews/remote, 
-            // but for local files this is less efficient than Node's fs.appendFile. 
-            // However, to keep it generic for VS Code FS API (which might be remote):
-            // We'll read the file, concat, and write. 
-            // Wait, reading 50MB to append 1MB is bad.
-            // Optimization: If scheme is file, use fs.appendFile directly if possible? 
-            // extensionHost runs in Node.
-            // Let's use standard fs for local files if possible, or VS Code API with read-modify-write as fallback.
-            // Actually, for simplicity and safety across remote:
-            // Regrettably, VS Code API has no append.
-            // But we can use workspace.fs.readFile, then concat. 
-            // Correct approach for large files in VS Code API: likely not optimal.
-            // But if we are in a local workspace, we can use `fs`.
-
-            if (targetUri.scheme === 'file') {
-              const fs = require('fs');
-              fs.appendFileSync(targetUri.fsPath, buffer);
-            } else {
-              // Fallback for remote/virtual filesystems (slow but correct)
-              const existing = await vscode.workspace.fs.readFile(targetUri);
-              const newBuffer = new Uint8Array(existing.length + buffer.length);
-              newBuffer.set(existing);
-              newBuffer.set(buffer, existing.length);
-              await vscode.workspace.fs.writeFile(targetUri, newBuffer);
+              if (targetUri.scheme === 'file') {
+                const fs = require('fs');
+                fs.appendFileSync(targetUri.fsPath, buffer);
+              } else {
+                // Fallback for remote/virtual filesystems (slow but correct)
+                const existing = await vscode.workspace.fs.readFile(targetUri);
+                const newBuffer = new Uint8Array(existing.length + buffer.length);
+                newBuffer.set(existing);
+                newBuffer.set(buffer, existing.length);
+                await vscode.workspace.fs.writeFile(targetUri, newBuffer);
+              }
+            } catch (err) {
+              console.error(err);
+              // Silent fail for chunks to avoid spam, or log to output channel
             }
-          } catch (err) {
-            console.error(err);
-            // Silent fail for chunks to avoid spam, or log to output channel
-          }
+          });
           break;
 
         case "saveFileEnd":
-          const { name } = message;
-          vscode.window.showInformationMessage(`Saved ${name} to project root.`);
+          this._fileWriteQueue = this._fileWriteQueue.then(async () => {
+            const { name } = message;
+            vscode.window.showInformationMessage(`Saved ${name} to project root.`);
+          });
           break;
         case "openUrl":
           if (message.url) {

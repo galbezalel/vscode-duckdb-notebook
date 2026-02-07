@@ -437,6 +437,7 @@ const App: React.FC = () => {
                     const db = (window as any).duckdbInstance;
                     if (db) {
                         const buffer = await db.copyFileToBuffer(fileName);
+                        console.log(`[App] Copied ${fileName} from DB, size=${buffer.length}`);
 
                         // Chunked Transfer
                         const CHUNK_SIZE = 1024 * 1024; // 1MB
@@ -451,6 +452,7 @@ const App: React.FC = () => {
                             const start = i * CHUNK_SIZE;
                             const end = Math.min(start + CHUNK_SIZE, totalSize);
                             const chunk = buffer.slice(start, end);
+                            console.log(`[App] Sending chunk ${i + 1}/${chunks} for ${fileName}, size=${chunk.length}`);
                             vscode.postMessage({
                                 type: 'saveFileChunk',
                                 name: fileName,
