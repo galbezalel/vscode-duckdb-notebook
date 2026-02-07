@@ -3,8 +3,10 @@ import { X, ChevronRight, ChevronDown } from 'lucide-react';
 
 interface ResultTableProps {
     columns: string[];
+    columnTypes?: string[];
     rows: any[];
     onOpenUrl: (url: string) => void;
+    forceJsonParsing: boolean;
 }
 
 const isUrl = (text: string): boolean => {
@@ -88,7 +90,7 @@ const JsonTree: React.FC<JsonTreeProps> = ({ data, label, expandAll = false }) =
     );
 };
 
-const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl }) => {
+const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, forceJsonParsing, columnTypes }) => {
     const [colWidths, setColWidths] = useState<number[]>([]);
     const [selectedData, setSelectedData] = useState<any | null>(null);
 
@@ -147,8 +149,8 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl }) =
         if (val === null) return null;
         if (typeof val === 'object') return val;
 
-        // Try parsing string if it looks like JSON
-        if (typeof val === 'string') {
+        // Try parsing string if it looks like JSON - Only if forced
+        if (forceJsonParsing && typeof val === 'string') {
             const trimmed = val.trim();
             if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
                 (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
@@ -241,7 +243,22 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl }) =
                                                 );
                                             }
 
-                                            const cellValue = String(rawValue ?? '').trim();
+                                            let cellValue = String(rawValue ?? '').trim();
+
+                                            // Check for Timestamp type using columnTypes
+                                            // DuckDB WASM types are strings like "TIMESTAMP", "DATE", etc.
+                                            // or sometimes objects { logicalType: ... } but here we converted to String(f.type) in App.tsx
+                                            // String(f.type) usually returns "TIMESTAMP" or similar for primitive types.
+                                            // Let's check if we have types and if the current col index matches a timestamp type.
+                                            const colType = columnTypes && columnTypes[j] ? columnTypes[j].toUpperCase() : '';
+                                            const isTimestamp = colType.includes('TIMESTAMP') || colType.includes('DATE');
+
+                                            if (isTimestamp && typeof rawValue === 'number') {
+                                                try {
+                                                    cellValue = new Date(rawValue).toISOString().replace('T', ' ').replace('Z', '');
+                                                } catch { }
+                                            }
+
                                             const isCellUrl = isUrl(cellValue);
                                             return (
                                                 <td key={j} title={cellValue}>

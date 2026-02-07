@@ -15,9 +15,10 @@ interface NotebookProps {
     onCopy: (id: string) => void;
     onOpenUrl: (url: string) => void;
     onAdd: (index: number) => void;
+    forceJsonParsing: boolean;
 }
 
-const Notebook: React.FC<NotebookProps> = ({ cells, focusId, onRun, onRunAndAdd, onUpdate, onRemove, onExport, onCopy, onOpenUrl, onAdd }) => {
+const Notebook: React.FC<NotebookProps> = ({ cells, focusId, onRun, onRunAndAdd, onUpdate, onRemove, onExport, onCopy, onOpenUrl, onAdd, forceJsonParsing }) => {
     return (
         <div className="notebook">
             {cells.map((cell, index) => (
@@ -33,6 +34,7 @@ const Notebook: React.FC<NotebookProps> = ({ cells, focusId, onRun, onRunAndAdd,
                         onCopy={() => onCopy(cell.id)}
                         onOpenUrl={onOpenUrl}
                         isLast={index === cells.length - 1}
+                        forceJsonParsing={forceJsonParsing}
                     />
                     <div className="cell-separator" onClick={() => onAdd(index + 1)}>
                         <div className="separator-line" />

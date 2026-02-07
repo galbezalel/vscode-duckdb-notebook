@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Notebook from './components/Notebook';
-import { Play, Plus, RefreshCw, Copy } from 'lucide-react';
+import SettingsModal from './components/SettingsModal';
+import { Play, Plus, RefreshCw, Copy, Settings as SettingsIcon } from 'lucide-react';
 
 // Define types for our data structures
 export interface CellData {
@@ -9,6 +10,7 @@ export interface CellData {
     status: 'idle' | 'running' | 'success' | 'error';
     error?: string;
     columns?: string[];
+    columnTypes?: string[];
     rows?: any[];
     executionTime?: number;
 }
@@ -37,6 +39,28 @@ const App: React.FC = () => {
     const [cells, setCells] = useState<CellData[]>([]);
     const [focusId, setFocusId] = useState<string | null>(null);
 
+    const [showSettings, setShowSettings] = useState(false);
+    const [settings, setSettings] = useState({
+        showDescribe: true,
+        previewLimit: 5,
+        forceJsonParsing: false
+    });
+
+    useEffect(() => {
+        const saved = localStorage.getItem('duckdb-settings');
+        if (saved) {
+            try {
+                setSettings(JSON.parse(saved));
+            } catch { }
+        }
+    }, []);
+
+    const saveSettings = (newSettings: typeof settings) => {
+        setSettings(newSettings);
+        localStorage.setItem('duckdb-settings', JSON.stringify(newSettings));
+        setShowSettings(false);
+    };
+
     // We'll keep the db instance in a ref or outside React state since it's not render-related directly
     // but for simplicity in this single-file view, we can manage connection state here.
     // In a real app, we might use a Context or a custom hook.
@@ -47,6 +71,12 @@ const App: React.FC = () => {
             switch (message.type) {
                 case 'loadData':
                     // Initialize DB and load data
+                    // We need to pass current settings, but since this is an event listener
+                    // registered on mount, 'settings' state will be stale (initial state).
+                    // We should use a ref for settings to access latest values in the callback
+                    // OR rely on the fact that loadData usually happens once or re-triggers initialization with fresh state if we structured it differently.
+                    // However, to fix the stale closure issue without re-registering the listener repeatedly,
+                    // let's use a ref.
                     initializeDuckDB(message);
                     break;
             }
@@ -62,11 +92,26 @@ const App: React.FC = () => {
         };
     }, []);
 
+    // Ref to access latest settings in initializeDuckDB without re-binding
+    const settingsRef = React.useRef(settings);
+    useEffect(() => {
+        settingsRef.current = settings;
+    }, [settings]);
+
     const initializeDuckDB = async (message: any) => {
         try {
             const { fileName, filePath, extension, data } = message;
 
+            // Get latest settings
+            const currentSettings = settingsRef.current;
+
             // Dynamic import
+            // ... (rest of the initialization code)
+
+            // NOTE FOR ASSISTANT: I need to replace the entire initializeDuckDB function or splice it carefully.
+            // But since I'm in a replace_file_content, I effectively rewriting the whole function if I include it.
+            // Let's rewrite initializeDuckDB to use settings.
+
             const duckdb = await import('@duckdb/duckdb-wasm');
             const paths = window.__duckdbPaths;
 
@@ -110,28 +155,36 @@ const App: React.FC = () => {
             // Cell 1: Setup & Load
             const cell1Id = `cell-${Date.now()}`;
             const setupQuery = [
-
                 `CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM ${readCommand};`,
                 `-- COPY ${tableName} TO '${fileName}_backup.parquet';`
             ].join('\n');
 
-            // Cell 2: Structure
-            const cell2Id = `cell-${Date.now() + 1}`;
-            const structureQuery = `DESCRIBE ${tableName};`;
+            const initialCells: CellData[] = [
+                { id: cell1Id, query: setupQuery, status: 'idle' }
+            ];
+
+            // Cell 2: Structure (Conditional)
+            if (currentSettings.showDescribe) {
+                const cell2Id = `cell-${Date.now() + 1}`;
+                initialCells.push({
+                    id: cell2Id,
+                    query: `DESCRIBE ${tableName};`,
+                    status: 'idle'
+                });
+            }
 
             // Cell 3: Preview
             const cell3Id = `cell-${Date.now() + 2}`;
-            const previewQuery = `SELECT * FROM ${tableName} LIMIT 5;`;
+            const previewQuery = `SELECT * FROM ${tableName} LIMIT ${currentSettings.previewLimit};`;
+            initialCells.push({
+                id: cell3Id,
+                query: previewQuery,
+                status: 'idle'
+            });
 
             // Cell 4: Empty
             const cell4Id = `cell-${Date.now() + 3}`;
-
-            const initialCells: CellData[] = [
-                { id: cell1Id, query: setupQuery, status: 'idle' },
-                { id: cell2Id, query: structureQuery, status: 'idle' },
-                { id: cell3Id, query: previewQuery, status: 'idle' },
-                { id: cell4Id, query: '', status: 'idle' }
-            ];
+            initialCells.push({ id: cell4Id, query: '', status: 'idle' });
 
             setCells(initialCells);
             setFocusId(cell4Id);
@@ -156,36 +209,29 @@ const App: React.FC = () => {
 
             if (cell1State.status !== 'success') return; // Stop if setup failed
 
-            // 2. Structure
-            let cell2State: Partial<CellData> = { status: 'running' };
-            setCells(prev => prev.map(c => c.id === cell2Id ? { ...c, ...cell2State } : c));
+            // Execute remaining cells sequentially
+            // We need to find the IDs we just created.
+            // Since initialCells is local, we can iterate it (skipping first which is setup)
 
-            try {
-                const s2 = performance.now();
-                const res = await conn.query(structureQuery);
-                const rows = res.toArray().map((r: any) => r.toJSON());
-                const columns = res.schema.fields.map((f: any) => f.name);
-                cell2State = { status: 'success', rows, columns, executionTime: performance.now() - s2 };
-            } catch (e: any) {
-                cell2State = { status: 'error', error: e.message };
+            for (let i = 1; i < initialCells.length; i++) {
+                const cell = initialCells[i];
+                if (!cell.query) continue; // Skip empty last cell
+
+                let cellState: Partial<CellData> = { status: 'running' };
+                setCells(prev => prev.map(c => c.id === cell.id ? { ...c, ...cellState } : c));
+
+                try {
+                    const s = performance.now();
+                    const res = await conn.query(cell.query);
+                    const rows = res.toArray().map((r: any) => r.toJSON());
+                    const columns = res.schema.fields.map((f: any) => f.name);
+                    const columnTypes = res.schema.fields.map((f: any) => String(f.type));
+                    cellState = { status: 'success', rows, columns, columnTypes, executionTime: performance.now() - s };
+                } catch (e: any) {
+                    cellState = { status: 'error', error: e.message };
+                }
+                setCells(prev => prev.map(c => c.id === cell.id ? { ...c, ...cellState } : c));
             }
-            setCells(prev => prev.map(c => c.id === cell2Id ? { ...c, ...cell2State } : c));
-
-            // 3. Preview
-            let cell3State: Partial<CellData> = { status: 'running' };
-            setCells(prev => prev.map(c => c.id === cell3Id ? { ...c, ...cell3State } : c));
-
-            try {
-                const s3 = performance.now();
-                const res = await conn.query(previewQuery);
-                const rows = res.toArray().map((r: any) => r.toJSON());
-                const columns = res.schema.fields.map((f: any) => f.name);
-                cell3State = { status: 'success', rows, columns, executionTime: performance.now() - s3 };
-            } catch (e: any) {
-                cell3State = { status: 'error', error: e.message };
-            }
-            setCells(prev => prev.map(c => c.id === cell3Id ? { ...c, ...cell3State } : c));
-
 
         } catch (err: any) {
             console.error(err);
@@ -254,11 +300,13 @@ const App: React.FC = () => {
             // DuckDB WASM result might still have toArray but empty
             const rows = result.toArray().map((row: any) => row.toJSON());
             const columns = result.schema.fields.map((f: any) => f.name);
+            const columnTypes = result.schema.fields.map((f: any) => String(f.type));
 
             updateCell(id, {
                 status: 'success',
                 rows,
                 columns,
+                columnTypes,
                 executionTime: performance.now() - startTime
             });
         } catch (err: any) {
@@ -384,13 +432,12 @@ const App: React.FC = () => {
                     <span className="badge">DuckDB</span>
                 </div>
                 <div className="actions">
-                    <button onClick={() => vscode.postMessage({ type: 'requestRefresh' })} title="Reload File">
+                    <button onClick={() => vscode.postMessage({ type: 'requestRefresh' })} title="Reload File" className="icon-btn">
                         <RefreshCw size={16} />
-                        <span>Reload</span>
                     </button>
-                    <button onClick={() => addCell()} className="primary">
-                        <Plus size={16} />
-                        <span>New Cell</span>
+                    <div className="divider" />
+                    <button onClick={() => setShowSettings(true)} title="Settings" className="icon-btn">
+                        <SettingsIcon size={16} />
                     </button>
                 </div>
             </header>
@@ -406,8 +453,15 @@ const App: React.FC = () => {
                     onOpenUrl={handleOpenUrl}
                     onCopy={copyCell}
                     onAdd={addCell}
+                    forceJsonParsing={settings.forceJsonParsing}
                 />
             </main>
+            <SettingsModal
+                isOpen={showSettings}
+                onClose={() => setShowSettings(false)}
+                settings={settings}
+                onSave={saveSettings}
+            />
         </div>
     );
 };

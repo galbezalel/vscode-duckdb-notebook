@@ -15,9 +15,10 @@ interface CellProps {
     onCopy: () => void;
     onOpenUrl: (url: string) => void;
     isLast: boolean;
+    forceJsonParsing: boolean;
 }
 
-const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onRunAndAdd, onUpdate, onRemove, onExport, onCopy, onOpenUrl }) => {
+const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onRunAndAdd, onUpdate, onRemove, onExport, onCopy, onOpenUrl, forceJsonParsing }) => {
     return (
         <div className={`cell ${data.status}`}>
             <div className="cell-header">
@@ -28,7 +29,7 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onRunAndAdd, onUpda
                     <span className="status-text">
                         {data.status === 'idle' ? 'Ready' :
                             data.status === 'running' ? 'Running...' :
-                                data.status === 'success' ? `Finished in ${data.executionTime?.toFixed(2)}ms` : 'Error'}
+                                data.status === 'success' ? `Finished in ${data.executionTime?.toFixed(2)}ms ${data.rows ? `(${data.rows.length} rows)` : ''}` : 'Error'}
                     </span>
                 </div>
                 <div className="cell-actions">
@@ -80,7 +81,7 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onRunAndAdd, onUpda
             {
                 data.status === 'success' && data.columns && (
                     <div className="cell-results">
-                        <ResultTable columns={data.columns} rows={data.rows || []} onOpenUrl={onOpenUrl} />
+                        <ResultTable columns={data.columns} rows={data.rows || []} columnTypes={data.columnTypes} onOpenUrl={onOpenUrl} forceJsonParsing={forceJsonParsing} />
                     </div>
                 )
             }
