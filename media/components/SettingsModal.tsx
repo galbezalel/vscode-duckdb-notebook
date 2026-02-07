@@ -5,6 +5,7 @@ interface Settings {
     showDescribe: boolean;
     previewLimit: number;
     forceJsonParsing: boolean;
+    allowExternalFileAccess: boolean;
 }
 
 interface SettingsModalProps {
@@ -80,8 +81,30 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                                 Force JSON Parsing
                             </label>
                             <p className="setting-desc">
-                                If enabled, string columns containing JSON will be parsed and displayed as interactive trees. 
+                                If enabled, string columns containing JSON will be parsed and displayed as interactive trees.
                                 If disabled, only native structural types are displayed as trees.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="settings-section">
+                        <h3>External Files</h3>
+                        <div className="setting-item">
+                            <label className="checkbox-label">
+                                <input
+                                    type="checkbox"
+                                    checked={localSettings.allowExternalFileAccess}
+                                    onChange={(e) => handleChange('allowExternalFileAccess', e.target.checked)}
+                                />
+                                Allow External File Access
+                            </label>
+                            <p className="setting-desc">
+                                If enabled, DuckDB can access files outside the virtual filesystem (e.g. <code>SELECT * FROM '/abs/path.csv'</code>).
+                                The extension will warn you before accessing any file unless you enable this.
+                                <br />
+                                <span style={{ fontStyle: 'italic', fontSize: '0.9em', opacity: 0.8 }}>
+                                    Note: This modifies the global VS Code setting "duckdb.allowExternalFileAccess".
+                                </span>
                             </p>
                         </div>
                     </div>

@@ -42,7 +42,17 @@
         ],
         "priority": "default"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "DuckDB Notebook",
+      "properties": {
+        "duckdb.allowExternalFileAccess": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow DuckDB to access files outside the virtual filesystem (e.g. read_csv('/abs/path.csv')). Security warning: verifying this allows reading any file the user has access to."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

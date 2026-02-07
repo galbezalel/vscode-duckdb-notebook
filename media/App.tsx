@@ -43,22 +43,49 @@ const App: React.FC = () => {
     const [settings, setSettings] = useState({
         showDescribe: true,
         previewLimit: 5,
-        forceJsonParsing: false
+        forceJsonParsing: false,
+        allowExternalFileAccess: false // Default, will be overwritten by Extension Host
     });
+
+    // File Access Request Handling
+    const pendingRequests = useRef<Map<string, { resolve: (value: any) => void, reject: (reason: any) => void }>>(new Map());
+
+    const requestFileAccess = (filePath: string): Promise<Uint8Array> => {
+        return new Promise((resolve, reject) => {
+            pendingRequests.current.set(filePath, { resolve, reject });
+            vscode.postMessage({ type: 'requestFileAccess', filePath });
+        });
+    };
 
     useEffect(() => {
         const saved = localStorage.getItem('duckdb-settings');
         if (saved) {
             try {
-                setSettings(JSON.parse(saved));
+                // Merge saved local settings with defaults
+                // We exclude allowExternalFileAccess from local storage as it is managed by VS Code
+                const parsed = JSON.parse(saved);
+                setSettings(prev => ({ ...prev, ...parsed, allowExternalFileAccess: prev.allowExternalFileAccess }));
             } catch { }
         }
     }, []);
 
     const saveSettings = (newSettings: typeof settings) => {
+        // Separate local vs extension settings
+        const { allowExternalFileAccess, ...localSettings } = newSettings;
+
+        // Update local settings
         setSettings(newSettings);
-        localStorage.setItem('duckdb-settings', JSON.stringify(newSettings));
+        localStorage.setItem('duckdb-settings', JSON.stringify(localSettings));
         setShowSettings(false);
+
+        // Update extension setting if changed (checking against current state might be good, 
+        // but 'settings' here is the old state? No, 'newSettings' is passed in).
+        // We always send the update to be safe, or check against ref.
+        vscode.postMessage({
+            type: 'updateConfiguration',
+            key: 'allowExternalFileAccess',
+            value: allowExternalFileAccess
+        });
     };
 
     // We'll keep the db instance in a ref or outside React state since it's not render-related directly
@@ -78,6 +105,26 @@ const App: React.FC = () => {
                     // However, to fix the stale closure issue without re-registering the listener repeatedly,
                     // let's use a ref.
                     initializeDuckDB(message);
+                    break;
+                case 'fileAccessGranted':
+                    {
+                        const { filePath, data } = message;
+                        const request = pendingRequests.current.get(filePath);
+                        if (request) {
+                            request.resolve(data);
+                            pendingRequests.current.delete(filePath);
+                        }
+                    }
+                    break;
+                case 'fileAccessDenied':
+                    {
+                        const { filePath, error } = message;
+                        const request = pendingRequests.current.get(filePath);
+                        if (request) {
+                            request.reject(new Error(error));
+                            pendingRequests.current.delete(filePath);
+                        }
+                    }
                     break;
             }
         };
@@ -104,17 +151,24 @@ const App: React.FC = () => {
     const initializeDuckDB = async (message: any) => {
         try {
             initialMessageRef.current = message;
-            const { fileName, filePath, extension, data } = message;
+            const { fileName, filePath, extension, data, config } = message;
 
-            // Get latest settings
+            // Update settings from config if provided
+            if (config) {
+                setSettings(prev => ({ ...prev, ...config }));
+            }
+
+            // Get latest settings (after update above? No, setState is async. 
+            // We should use the merged value for immediate use if needed, 
+            // but for DB init we likely don't need allowExternalFileAccess immediately 
+            // unless we eagerly load something. 'showDescribe' etc come from local state which is already set.
+            // But wait, if we just called setSettings, 'settingsRef.current' wont be updated yet in this synchronous block.
+            // However, showDescribe/previewLimit come from localStorage/defaults.
+            // allowExternalFileAccess comes from message. 
+            // We don't use allowExternalFileAccess in initializeDuckDB directly, only later in query execution.
+            // So calling setSettings here is fine for UI.)
+
             const currentSettings = settingsRef.current;
-
-            // Dynamic import
-            // ... (rest of the initialization code)
-
-            // NOTE FOR ASSISTANT: I need to replace the entire initializeDuckDB function or splice it carefully.
-            // But since I'm in a replace_file_content, I effectively rewriting the whole function if I include it.
-            // Let's rewrite initializeDuckDB to use settings.
 
             const duckdb = await import('@duckdb/duckdb-wasm');
             const paths = window.__duckdbPaths;
@@ -309,16 +363,6 @@ const App: React.FC = () => {
     };
 
     const runCell = async (id: string) => {
-        // We need to get the latest cell state, but since runCell is a closure, 
-        // we rely on the id lookup in the current 'cells' state if we were to use it directly.
-        // However, 'cells' in this closure is stale if not careful.
-        // Better to use functional update or ref for latest state if needed, 
-        // but here we just need the query which shouldn't change *during* the run initiation 
-        // unless user types fast. 
-        // Actually, 'cells' is from the render scope, so it might be stale if runCell is not recreated.
-        // But 'runCell' is passed down. Let's use a ref for cells or just trust React re-renders.
-        // For safety, let's find the cell in the current render scope 'cells'.
-
         const cell = cells.find(c => c.id === id);
         if (!cell || !dbReady) return;
 
@@ -335,7 +379,40 @@ const App: React.FC = () => {
                 return;
             }
 
-            const result = await conn.query(cell.query);
+            const executeQuery = async (): Promise<any> => {
+                try {
+                    return await conn.query(cell.query);
+                } catch (err: any) {
+                    const errorMsg = err.message || '';
+                    // IO Error: No files found that match the pattern "/Users/..."
+                    const match = errorMsg.match(/IO Error: No files found that match the pattern "([^"]+)"/);
+                    if (match && match[1]) {
+                        // Found external file access attempt
+                        const filePath = match[1];
+                        console.log(`Intercepted file access request: ${filePath}`);
+
+                        // Request access from extension host
+                        try {
+                            // 1. Request file content
+                            const buffer = await requestFileAccess(filePath);
+
+                            // 2. Register file in DuckDB
+                            const db = (window as any).duckdbInstance;
+                            await db.registerFileBuffer(filePath, buffer);
+
+                            // 3. Retry query
+                            return await conn.query(cell.query);
+                        } catch (accessErr: any) {
+                            // User denied or failed
+                            throw new Error(`File Access Denied: ${accessErr.message}`);
+                        }
+                    } else {
+                        throw err;
+                    }
+                }
+            };
+
+            const result = await executeQuery();
 
             // Check if it's a command that doesn't return rows (like CREATE VIEW)
             // DuckDB WASM result might still have toArray but empty

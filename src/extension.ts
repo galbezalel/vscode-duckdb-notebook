@@ -60,6 +60,16 @@ class DuckDBViewerProvider
     return DataDocument.create(uri);
   }
 
+  private resolveTargetUri(name: string, documentUri: vscode.Uri): vscode.Uri {
+    if (path.isAbsolute(name)) {
+      return vscode.Uri.file(name);
+    }
+    if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+      return vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, name);
+    }
+    return vscode.Uri.file(path.join(path.dirname(documentUri.fsPath), name));
+  }
+
   async resolveCustomEditor(
     document: DataDocument,
     webviewPanel: vscode.WebviewPanel,
@@ -89,12 +99,19 @@ class DuckDBViewerProvider
           raw.byteOffset + raw.byteLength,
         );
 
+        // Get initial config
+        const config = vscode.workspace.getConfiguration("duckdb");
+        const allowExternalFileAccess = config.get<boolean>("allowExternalFileAccess") ?? false;
+
         webview.postMessage({
           type: "loadData",
           fileName,
           filePath,
           extension: fileExtension,
-          data: buffer
+          data: buffer,
+          config: {
+            allowExternalFileAccess
+          }
         });
 
       } catch (err) {
@@ -111,6 +128,18 @@ class DuckDBViewerProvider
           break;
         case "requestRefresh":
           await pushDataToWebview();
+          break;
+        case "updateConfiguration":
+          try {
+            const { key, value } = message;
+            const config = vscode.workspace.getConfiguration("duckdb");
+            await config.update(key, value, vscode.ConfigurationTarget.Global);
+            // Also update workspace if it exists and overrides global? 
+            // For simplicity, we just set Global as that's what "Remember my choice" does. 
+            // If user wants workspace specific, they can use VS Code settings UI.
+          } catch (err) {
+            vscode.window.showErrorMessage(`Failed to update setting: ${err}`);
+          }
           break;
         case "copyToClipboard":
           if (typeof message.value === "string") {
@@ -142,12 +171,7 @@ class DuckDBViewerProvider
         case "saveFileStart":
           try {
             const { name } = message;
-            let targetUri: vscode.Uri;
-            if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-              targetUri = vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, name);
-            } else {
-              targetUri = vscode.Uri.file(path.join(path.dirname(document.uri.fsPath), name));
-            }
+            const targetUri = this.resolveTargetUri(name, document.uri);
             // Create/overwrite with empty content
             await vscode.workspace.fs.writeFile(targetUri, new Uint8Array(0));
           } catch (err) {
@@ -160,12 +184,7 @@ class DuckDBViewerProvider
             const { name, data } = message;
             const buffer = new Uint8Array(data);
 
-            let targetUri: vscode.Uri;
-            if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-              targetUri = vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, name);
-            } else {
-              targetUri = vscode.Uri.file(path.join(path.dirname(document.uri.fsPath), name));
-            }
+            const targetUri = this.resolveTargetUri(name, document.uri);
 
             // Read existing, append, write back.
             // Note: vscode.fs doesn't support appendStream easily for webviews/remote, 
@@ -206,6 +225,64 @@ class DuckDBViewerProvider
         case "openUrl":
           if (message.url) {
             vscode.env.openExternal(vscode.Uri.parse(message.url));
+          }
+          break;
+        case "requestFileAccess":
+          try {
+            const { filePath } = message;
+            const config = vscode.workspace.getConfiguration("duckdb");
+            const allowExternal = config.get<boolean>("allowExternalFileAccess");
+
+            if (allowExternal) {
+              // Allowed by setting
+              const fileUri = vscode.Uri.file(filePath);
+              const data = await vscode.workspace.fs.readFile(fileUri);
+              webview.postMessage({
+                type: "fileAccessGranted",
+                filePath,
+                data: new Uint8Array(data)
+              });
+              return;
+            }
+
+            // Not allowed yet, ask user
+            const selection = await vscode.window.showWarningMessage(
+              `DuckDB wants to read an external file: ${filePath}. Allow this?`,
+              "Allow",
+              "Allow and Remember",
+              "Deny"
+            );
+
+            if (selection === "Allow") {
+              const fileUri = vscode.Uri.file(filePath);
+              const data = await vscode.workspace.fs.readFile(fileUri);
+              webview.postMessage({
+                type: "fileAccessGranted",
+                filePath,
+                data: new Uint8Array(data)
+              });
+            } else if (selection === "Allow and Remember") {
+              await config.update("allowExternalFileAccess", true, vscode.ConfigurationTarget.Global);
+              const fileUri = vscode.Uri.file(filePath);
+              const data = await vscode.workspace.fs.readFile(fileUri);
+              webview.postMessage({
+                type: "fileAccessGranted",
+                filePath,
+                data: new Uint8Array(data)
+              });
+            } else {
+              webview.postMessage({
+                type: "fileAccessDenied",
+                filePath,
+                error: "User denied access"
+              });
+            }
+          } catch (err) {
+            webview.postMessage({
+              type: "fileAccessDenied",
+              filePath: message.filePath,
+              error: err instanceof Error ? err.message : String(err)
+            });
           }
           break;
         default:
