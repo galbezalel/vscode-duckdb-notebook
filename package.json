@@ -3,7 +3,7 @@
   "displayName": "DuckDB Notebook",
   "icon": "icon.png",
   "description": "Open CSV and Parquet files with a DuckDB-backed Notebook interface.",
-  "version": "0.0.4",
+  "version": "0.0.41",
   "publisher": "galbez",
   "license": "MIT",
   "engines": {
