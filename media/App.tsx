@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Notebook from './components/Notebook';
 import SettingsModal from './components/SettingsModal';
 import { Play, Plus, RefreshCw, Copy, Settings as SettingsIcon } from 'lucide-react';
@@ -98,8 +98,12 @@ const App: React.FC = () => {
         settingsRef.current = settings;
     }, [settings]);
 
+    // Store initial load message for re-initialization
+    const initialMessageRef = useRef<any>(null);
+
     const initializeDuckDB = async (message: any) => {
         try {
+            initialMessageRef.current = message;
             const { fileName, filePath, extension, data } = message;
 
             // Get latest settings
@@ -125,6 +129,7 @@ const App: React.FC = () => {
             );
             const worker = new Worker(workerUrl);
             URL.revokeObjectURL(workerUrl);
+            (window as any).duckdbWorker = worker; // Store worker for termination
 
             const logger = new duckdb.ConsoleLogger();
             const db = new duckdb.AsyncDuckDB(logger, worker);
@@ -240,6 +245,42 @@ const App: React.FC = () => {
     };
 
 
+    const stopCell = async (id: string) => {
+        const cell = cells.find(c => c.id === id);
+        if (!cell || cell.status !== 'running') return;
+
+        // Visual update immediately
+        updateCell(id, { status: 'idle', error: 'Execution cancelled' });
+
+        // Terminate worker
+        try {
+            const worker = (window as any).duckdbWorker;
+            if (worker) {
+                worker.terminate();
+            }
+            const db = (window as any).duckdbInstance;
+            if (db) {
+                await db.terminate();
+            }
+        } catch (e) {
+            console.error("Error terminating worker:", e);
+        }
+
+        setDbReady(false);
+        (window as any).duckdbConnection = null;
+        (window as any).duckdbInstance = null;
+        (window as any).duckdbWorker = null;
+
+        // Re-initialize if we have the initial data
+        if (initialMessageRef.current) {
+            // Small delay to ensure clean termination
+            setTimeout(() => {
+                initializeDuckDB(initialMessageRef.current);
+            }, 100);
+        }
+    };
+
+
     const addCell = (index?: number) => {
         const newId = `cell-${Date.now()}`;
         const newCell: CellData = {
@@ -309,6 +350,49 @@ const App: React.FC = () => {
                 columnTypes,
                 executionTime: performance.now() - startTime
             });
+
+            // Check for COPY command to handle file export to local disk
+            // Regex to capture filename in: COPY ... TO 'filename' ...
+            const copyMatch = cell.query.match(/COPY\s+(?:.*|\(.*?\))\s+TO\s+'([^']+)'/i);
+            if (copyMatch && copyMatch[1]) {
+                const fileName = copyMatch[1];
+                try {
+                    const db = (window as any).duckdbInstance;
+                    if (db) {
+                        const buffer = await db.copyFileToBuffer(fileName);
+
+                        // Chunked Transfer
+                        const CHUNK_SIZE = 1024 * 1024; // 1MB
+                        const totalSize = buffer.length;
+                        const chunks = Math.ceil(totalSize / CHUNK_SIZE);
+
+                        // Start
+                        vscode.postMessage({ type: 'saveFileStart', name: fileName });
+
+                        // Send Chunks
+                        for (let i = 0; i < chunks; i++) {
+                            const start = i * CHUNK_SIZE;
+                            const end = Math.min(start + CHUNK_SIZE, totalSize);
+                            const chunk = buffer.slice(start, end);
+                            vscode.postMessage({
+                                type: 'saveFileChunk',
+                                name: fileName,
+                                data: chunk
+                            });
+                            // Allow UI loop to breathe slightly
+                            await new Promise(r => setTimeout(r, 10));
+                        }
+
+                        // End
+                        vscode.postMessage({ type: 'saveFileEnd', name: fileName });
+
+                        await db.dropFile(fileName);
+                    }
+                } catch (e) {
+                    console.error("Failed to export COPY file:", e);
+                    // Don't fail the cell execution, just log/notify
+                }
+            }
         } catch (err: any) {
             updateCell(id, {
                 status: 'error',
@@ -446,6 +530,7 @@ const App: React.FC = () => {
                     cells={cells}
                     focusId={focusId}
                     onRun={runCell}
+                    onStop={stopCell} // Pass stop handler
                     onRunAndAdd={runCellAndAdd}
                     onUpdate={updateCell}
                     onRemove={removeCell}

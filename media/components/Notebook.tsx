@@ -8,6 +8,7 @@ interface NotebookProps {
     cells: CellData[];
     focusId: string | null;
     onRun: (id: string) => void;
+    onStop: (id: string) => void;
     onRunAndAdd: (id: string) => void;
     onUpdate: (id: string, data: Partial<CellData>) => void;
     onRemove: (id: string) => void;
@@ -18,7 +19,7 @@ interface NotebookProps {
     forceJsonParsing: boolean;
 }
 
-const Notebook: React.FC<NotebookProps> = ({ cells, focusId, onRun, onRunAndAdd, onUpdate, onRemove, onExport, onCopy, onOpenUrl, onAdd, forceJsonParsing }) => {
+const Notebook: React.FC<NotebookProps> = ({ cells, focusId, onRun, onStop, onRunAndAdd, onUpdate, onRemove, onExport, onCopy, onOpenUrl, onAdd, forceJsonParsing }) => {
     return (
         <div className="notebook">
             {cells.map((cell, index) => (
@@ -27,6 +28,7 @@ const Notebook: React.FC<NotebookProps> = ({ cells, focusId, onRun, onRunAndAdd,
                         data={cell}
                         autoFocus={cell.id === focusId}
                         onRun={() => onRun(cell.id)}
+                        onStop={() => onStop(cell.id)}
                         onRunAndAdd={() => onRunAndAdd(cell.id)}
                         onUpdate={(updates) => onUpdate(cell.id, updates)}
                         onRemove={() => onRemove(cell.id)}
