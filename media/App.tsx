@@ -480,19 +480,29 @@ const App: React.FC = () => {
         }
     };
 
-    const runCellAndAdd = async (id: string) => {
-        await runCell(id);
+    const handleReorder = (activeId: string, overId: string) => {
+        setCells((items) => {
+            const oldIndex = items.findIndex((c) => c.id === activeId);
+            const newIndex = items.findIndex((c) => c.id === overId);
 
-        // We need to check if we need to add a cell. 
-        // Since runCell is async, 'cells' might be stale here if we rely on closure.
-        // But we can check the index based on the *current* cells when this function was created.
-        // Ideally, we should use a functional update to be safe or check against latest.
-        // But for now, let's just check the index.
+            // Basic array move logic since we can't import arrayMove here easily without adding it to App deps too,
+            // or we just implement it. It's simple.
+            const newItems = [...items];
+            const [movedItem] = newItems.splice(oldIndex, 1);
+            newItems.splice(newIndex, 0, movedItem);
+            return newItems;
+        });
+    };
+
+    const runCellAndAdvance = async (id: string) => {
+        await runCell(id);
 
         const index = cells.findIndex(c => c.id === id);
         if (index === -1) return;
 
-        if (index === cells.length - 1) {
+        if (index < cells.length - 1) {
+            setFocusId(cells[index + 1].id);
+        } else {
             addCell();
         }
     };
@@ -610,13 +620,14 @@ const App: React.FC = () => {
                     focusId={focusId}
                     onRun={runCell}
                     onStop={stopCell} // Pass stop handler
-                    onRunAndAdd={runCellAndAdd}
+                    onRunAndAdvance={runCellAndAdvance}
                     onUpdate={updateCell}
                     onRemove={removeCell}
                     onExport={exportCell}
                     onOpenUrl={handleOpenUrl}
                     onCopy={copyCell}
                     onAdd={addCell}
+                    onReorder={handleReorder}
                     forceJsonParsing={settings.forceJsonParsing}
                 />
             </main>

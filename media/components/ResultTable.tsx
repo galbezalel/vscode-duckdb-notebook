@@ -335,7 +335,7 @@ const HeaderCell: React.FC<HeaderCellProps> = ({ label, width, onResize }) => {
 
         const onHover = (e: MouseEvent) => {
             const rect = th.getBoundingClientRect();
-            th.style.cursor = e.clientX > rect.right - 10 ? 'col-resize' : 'default';
+            th.style.cursor = e.clientX > rect.right - 10 ? 'col-resize' : 'auto';
         };
         th.addEventListener('mousemove', onHover);
 

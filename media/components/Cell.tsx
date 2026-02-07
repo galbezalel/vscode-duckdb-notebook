@@ -3,13 +3,15 @@ import { Play, Trash2, Clock, AlertCircle, CheckCircle2, Download, FileOutput, C
 import { CellData } from '../App';
 import SqlEditor from './SqlEditor';
 import ResultTable from './ResultTable';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface CellProps {
     data: CellData;
     autoFocus?: boolean;
     onRun: () => void;
     onStop: () => void;
-    onRunAndAdd: () => void;
+    onRunAndAdvance: () => void;
     onUpdate: (data: Partial<CellData>) => void;
     onRemove: () => void;
     onExport: (format: 'csv' | 'parquet') => void;
@@ -19,10 +21,42 @@ interface CellProps {
     forceJsonParsing: boolean;
 }
 
-const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdd, onUpdate, onRemove, onExport, onCopy, onOpenUrl, forceJsonParsing }) => {
+const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdvance, onUpdate, onRemove, onExport, onCopy, onOpenUrl, forceJsonParsing }) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: data.id });
+
+    const cellRef = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        if (autoFocus && cellRef.current) {
+            // Scroll to the cell when it gets focus
+            cellRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }, [autoFocus]);
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        zIndex: isDragging ? 999 : 'auto',
+        position: 'relative' as const,
+    };
+
+    // Combine dnd-kit ref and local ref
+    const setRefs = (node: HTMLDivElement | null) => {
+        setNodeRef(node);
+        cellRef.current = node;
+    };
+
     return (
-        <div className={`cell ${data.status}`}>
-            <div className="cell-header">
+        <div ref={setRefs} style={style} className={`cell ${data.status}`}>
+            <div className="cell-header" {...attributes} {...listeners} style={{ cursor: 'grab' }}>
                 <div className="cell-status">
                     {data.status === 'running' && <div className="spinner" />}
                     {data.status === 'success' && <CheckCircle2 size={14} className="text-success" />}
@@ -33,7 +67,7 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdd
                                 data.status === 'success' ? `Finished in ${data.executionTime?.toFixed(2)}ms ${data.rows ? `(${data.rows.length} rows)` : ''}` : 'Error'}
                     </span>
                 </div>
-                <div className="cell-actions">
+                <div className="cell-actions" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                     {data.status === 'running' ? (
                         <button onClick={onStop} className="icon-btn stop-btn" title="Stop Execution">
                             <Square size={14} fill="currentColor" />
@@ -72,7 +106,7 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdd
                     autoFocus={autoFocus}
                     onChange={(val) => onUpdate({ query: val })}
                     onRun={onRun}
-                    onRunAndAdd={onRunAndAdd}
+                    onRunAndAdvance={onRunAndAdvance}
                 />
             </div>
 

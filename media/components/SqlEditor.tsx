@@ -11,23 +11,23 @@ interface SqlEditorProps {
     autoFocus?: boolean;
     onChange: (value: string) => void;
     onRun: () => void;
-    onRunAndAdd: () => void;
+    onRunAndAdvance: () => void;
 }
 
-const SqlEditor: React.FC<SqlEditorProps> = ({ value, autoFocus, onChange, onRun, onRunAndAdd }) => {
+const SqlEditor: React.FC<SqlEditorProps> = ({ value, autoFocus, onChange, onRun, onRunAndAdvance }) => {
     const editorRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
 
     // Use refs for callbacks to avoid stale closures in the effect
     const onChangeRef = useRef(onChange);
     const onRunRef = useRef(onRun);
-    const onRunAndAddRef = useRef(onRunAndAdd);
+    const onRunAndAdvanceRef = useRef(onRunAndAdvance);
 
     useEffect(() => {
         onChangeRef.current = onChange;
         onRunRef.current = onRun;
-        onRunAndAddRef.current = onRunAndAdd;
-    }, [onChange, onRun, onRunAndAdd]);
+        onRunAndAdvanceRef.current = onRunAndAdvance;
+    }, [onChange, onRun, onRunAndAdvance]);
 
     useEffect(() => {
         if (!editorRef.current) return;
@@ -50,7 +50,7 @@ const SqlEditor: React.FC<SqlEditorProps> = ({ value, autoFocus, onChange, onRun
                     {
                         key: "Shift-Enter",
                         run: () => {
-                            onRunAndAddRef.current();
+                            onRunAndAdvanceRef.current();
                             return true;
                         },
                         preventDefault: true

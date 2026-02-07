@@ -163,6 +163,7 @@ button.icon-btn:hover {
 
 /* Cell */
 .cell {
+  /* ... existing styles ... */
   border: 1px solid var(--vscode-panel-border);
   border-radius: 6px;
   background-color: var(--vscode-editor-background);
@@ -183,6 +184,10 @@ button.icon-btn:hover {
   background-color: var(--vscode-editor-inactiveSelectionBackground);
   border-bottom: 1px solid var(--vscode-panel-border);
   height: 24px;
+}
+
+.cell-header:active {
+  cursor: grabbing !important;
 }
 
 .divider {
@@ -291,7 +296,6 @@ td {
 th {
   background-color: var(--vscode-editor-widget-background);
   font-weight: 600;
-  user-select: none;
   position: relative;
   /* For resize handle */
 }
