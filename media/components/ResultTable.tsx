@@ -7,6 +7,7 @@ interface ResultTableProps {
     rows: any[];
     onOpenUrl: (url: string) => void;
     forceJsonParsing: boolean;
+    enableTextWrap: boolean;
 }
 
 const isUrl = (text: string): boolean => {
@@ -90,9 +91,10 @@ const JsonTree: React.FC<JsonTreeProps> = ({ data, label, expandAll = false }) =
     );
 };
 
-const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, forceJsonParsing, columnTypes }) => {
+const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, forceJsonParsing, columnTypes, enableTextWrap }) => {
     const [colWidths, setColWidths] = useState<number[]>([]);
     const [selectedData, setSelectedData] = useState<any | null>(null);
+    const [tooltip, setTooltip] = useState<{ visible: boolean; x: number; y: number; content: string } | null>(null);
 
     const calculateColumnWidths = (cols: string[], data: any[]) => {
         const MIN_WIDTH = 100;
@@ -138,6 +140,35 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
         });
     };
 
+    const handleCellMouseEnter = (e: React.MouseEvent, content: string) => {
+        if (!content) return;
+
+        // Check for overflow
+        const element = e.currentTarget as HTMLElement;
+        if (element.scrollWidth <= element.clientWidth) {
+            return;
+        }
+
+        // Calculate position
+        setTooltip({
+            visible: true,
+            x: e.clientX + 10,
+            y: e.clientY + 10,
+            content
+        });
+    };
+
+    const handleCellMouseLeave = () => {
+        setTooltip(null);
+    };
+
+    // Update tooltip position while moving mouse
+    const handleCellMouseMove = (e: React.MouseEvent) => {
+        if (tooltip?.visible) {
+            setTooltip(prev => prev ? ({ ...prev, x: e.clientX + 10, y: e.clientY + 10 }) : null);
+        }
+    };
+
     if (!columns.length) {
         return <div className="muted">No results</div>;
     }
@@ -180,6 +211,18 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
                 </div>
             )}
 
+            {tooltip && tooltip.visible && (
+                <div
+                    className="custom-tooltip"
+                    style={{
+                        top: tooltip.y,
+                        left: tooltip.x,
+                    }}
+                >
+                    {tooltip.content}
+                </div>
+            )}
+
             <div className="table-wrapper">
                 <div className="table-inner" style={{ minWidth: totalWidth }}>
                     <table className="header-table" style={{ width: totalWidth }}>
@@ -213,7 +256,13 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
                                             // Explicit check for null
                                             if (rawValue === null) {
                                                 return (
-                                                    <td key={j} title="NULL">
+                                                    <td
+                                                        key={j}
+                                                        className={enableTextWrap ? 'wrap-text' : ''}
+                                                        onMouseEnter={(e) => handleCellMouseEnter(e, "NULL")}
+                                                        onMouseLeave={handleCellMouseLeave}
+                                                        onMouseMove={handleCellMouseMove}
+                                                    >
                                                         <span className="null-value">NULL</span>
                                                     </td>
                                                 );
@@ -225,7 +274,7 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
                                             if (objectValue) {
                                                 const isArray = Array.isArray(objectValue);
                                                 const display = isArray ? `Array(${objectValue.length})` : '{...}';
-
+                                                // Objects don't need text wrap usually, they are clickable
                                                 return (
                                                     <td
                                                         key={j}
@@ -260,8 +309,18 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
                                             }
 
                                             const isCellUrl = isUrl(cellValue);
+
+                                            // Determine classes
+                                            const cellClass = enableTextWrap ? 'wrap-text' : '';
+
                                             return (
-                                                <td key={j} title={cellValue}>
+                                                <td
+                                                    key={j}
+                                                    className={cellClass}
+                                                    onMouseEnter={(e) => handleCellMouseEnter(e, cellValue)}
+                                                    onMouseLeave={handleCellMouseLeave}
+                                                    onMouseMove={handleCellMouseMove}
+                                                >
                                                     {isCellUrl ? (
                                                         <a
                                                             href={cellValue}

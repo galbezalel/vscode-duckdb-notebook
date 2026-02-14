@@ -44,7 +44,8 @@ const App: React.FC = () => {
         showDescribe: true,
         previewLimit: 5,
         forceJsonParsing: false,
-        allowExternalFileAccess: false // Default, will be overwritten by Extension Host
+        allowExternalFileAccess: false,
+        enableTextWrap: false
     });
 
     // File Access Request Handling
@@ -629,6 +630,7 @@ const App: React.FC = () => {
                     onAdd={addCell}
                     onReorder={handleReorder}
                     forceJsonParsing={settings.forceJsonParsing}
+                    enableTextWrap={settings.enableTextWrap}
                 />
             </main>
             <SettingsModal

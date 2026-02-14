@@ -648,3 +648,23 @@ tr:hover td {
 .cancel-btn:hover {
   background-color: var(--vscode-button-secondaryHoverBackground);
 }
+.wrap-text {
+  white-space: normal !important;
+  overflow-wrap: break-word;
+  height: auto;
+}
+
+.custom-tooltip {
+  position: fixed;
+  background-color: var(--vscode-editorHoverWidget-background);
+  color: var(--vscode-editorHoverWidget-foreground);
+  border: 1px solid var(--vscode-editorHoverWidget-border);
+  padding: 4px 8px;
+  border-radius: 4px;
+  z-index: 10000;
+  pointer-events: none;
+  max-width: 400px;
+  word-wrap: break-word;
+  font-size: 12px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}

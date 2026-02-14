@@ -6,6 +6,7 @@ interface Settings {
     previewLimit: number;
     forceJsonParsing: boolean;
     allowExternalFileAccess: boolean;
+    enableTextWrap: boolean;
 }
 
 interface SettingsModalProps {
@@ -83,6 +84,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                             <p className="setting-desc">
                                 If enabled, string columns containing JSON will be parsed and displayed as interactive trees.
                                 If disabled, only native structural types are displayed as trees.
+                            </p>
+                        </div>
+                        <div className="setting-item">
+                            <label className="checkbox-label">
+                                <input
+                                    type="checkbox"
+                                    checked={localSettings.enableTextWrap}
+                                    onChange={(e) => handleChange('enableTextWrap', e.target.checked)}
+                                />
+                                Enable Text Wrap
+                            </label>
+                            <p className="setting-desc">
+                                If enabled, long text in grid cells will wrap instead of being truncated.
                             </p>
                         </div>
                     </div>

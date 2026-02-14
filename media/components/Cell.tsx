@@ -19,9 +19,10 @@ interface CellProps {
     onOpenUrl: (url: string) => void;
     isLast: boolean;
     forceJsonParsing: boolean;
+    enableTextWrap: boolean;
 }
 
-const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdvance, onUpdate, onRemove, onExport, onCopy, onOpenUrl, forceJsonParsing }) => {
+const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdvance, onUpdate, onRemove, onExport, onCopy, onOpenUrl, forceJsonParsing, enableTextWrap }) => {
     const {
         attributes,
         listeners,
@@ -122,7 +123,7 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdv
             {
                 data.status === 'success' && data.columns && (
                     <div className="cell-results">
-                        <ResultTable columns={data.columns} rows={data.rows || []} columnTypes={data.columnTypes} onOpenUrl={onOpenUrl} forceJsonParsing={forceJsonParsing} />
+                        <ResultTable columns={data.columns} rows={data.rows || []} columnTypes={data.columnTypes} onOpenUrl={onOpenUrl} forceJsonParsing={forceJsonParsing} enableTextWrap={enableTextWrap} />
                     </div>
                 )
             }
