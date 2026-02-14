@@ -2,29 +2,40 @@
  
  Open CSV or Parquet files with a DuckDB-backed Notebook interface. Run multiple SQL queries in separate cells, view results in interactive tables, and export data.
  
+ ![DuckDB Notebook Preview](demo_notebook.png)
+ 
  ## Features
+
+### 1. Interactive Notebook
+- **Smart Execution**: Run cells with `Cmd+Enter` or `Shift+Enter` (runs and adds a new cell below).
+- **Cell Management**: 
+  - **Drag & Drop**: Reorder cells by dragging the handle.
+  - **Add/Remove**: Insert new cells between existing ones or delete them.
+- **Cancellation**: Stop long-running queries with the Stop button.
+
+### 2. Rich Data Viewer
+- **Interactive Tables**: Scrollable results with sticky headers.
+- **JSON Support**: Automatically detects and renders JSON objects/arrays in a collapsible tree view.
+- **NULL Handling**: Visually distinguishes `NULL` values from empty strings.
+- **Clickable Links**: Automatically detects and links URLs in result cells.
+- **Column Types**: Displays DuckDB column types in usage.
+
+### 3. Supported Formats
+- **CSV**: Automatic dialect detection, with specific handling for headers.
+- **Parquet**: High-performance native support.
+
+### 4. Customization & Security
+- **Settings Modal**: Configure behavior via the settings gear icon:
+  - **Text Wrap**: Toggle text wrapping in grid cells.
+  - **JSON Parsing**: Force JSON parsing for ambiguous columns.
+  - **Preview Limit**: Set the default number of rows to fetch.
+- **Security**: Explicit permission prompts for accessing external files (e.g., `read_csv('/abs/path.csv')`).
+
+### 5. Export
+- **One-Click Export**: Download cell results as **CSV** or **Parquet** files directly from the cell header.
+- **Copy to Clipboard**: Copy data formatted for spreadsheet pasting.
  
- ### 1. Notebook View
- - **Interactive Cells**: Create multiple SQL query cells to explore your data step-by-step.
- - **Auto-Initialization**: Automatically creates a view for your file and runs a sample query (`SELECT * ... LIMIT 100`) when you open a file.
- - **Smart Execution**: Run cells with `Cmd+Enter` or `Shift+Enter` (runs and adds a new cell).
- - **Auto-Focus**: Automatically focuses on the next cell for a seamless workflow.
  
- ### 2. Export Options
- - **Export Results**: Easily export the results of any query cell to **CSV** or **Parquet**.
- - **One-Click Download**: Use the export buttons in the cell header to save your transformed data locally.
- 
- ## Build Instructions
- 
- To package the extension into a `.vsix` file yourself:
- 1. Ensure you have `npm` installed.
- 2. Run `npx vsce package`.
- 3. This will create the `.vsix` file in the current directory.
- 
- ## Development
- 1. Install dependencies: `npm install`
- 2. Build once: `npm run compile` (or `npm run watch` during development).
- 3. Press `F5` in VS Code to launch an Extension Development Host.
  
  ## Notes
  - DuckDB runs in the webview via `@duckdb/duckdb-wasm`, bundled locally in `media/duckdb` (no CDN required at runtime).
