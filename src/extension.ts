@@ -155,7 +155,7 @@ class DuckDBViewerProvider
             const buffer = new Uint8Array(data);
 
             const uri = await vscode.window.showSaveDialog({
-              defaultUri: vscode.Uri.file(defaultName),
+              defaultUri: vscode.Uri.joinPath(document.uri, '..', defaultName),
               filters: {
                 [format === 'csv' ? 'CSV' : 'Parquet']: [format]
               }
