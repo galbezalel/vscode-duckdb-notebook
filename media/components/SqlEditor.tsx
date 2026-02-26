@@ -3,7 +3,7 @@ import { EditorView, keymap } from '@codemirror/view';
 import { EditorState, Prec } from '@codemirror/state';
 import { sql } from '@codemirror/lang-sql';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { defaultKeymap } from '@codemirror/commands';
+import { defaultKeymap, addCursorAbove, addCursorBelow } from '@codemirror/commands';
 import { basicSetup } from 'codemirror';
 
 interface SqlEditorProps {
@@ -38,7 +38,11 @@ const SqlEditor: React.FC<SqlEditorProps> = ({ value, autoFocus, onChange, onRun
                 basicSetup,
                 sql(),
                 oneDark,
+                EditorState.allowMultipleSelections.of(true),
+                EditorView.clickAddsSelectionRange.of(event => event.altKey),
                 Prec.highest(keymap.of([
+                    { key: "Alt-ArrowUp", run: addCursorAbove },
+                    { key: "Alt-ArrowDown", run: addCursorBelow },
                     {
                         key: "Mod-Enter",
                         run: () => {
