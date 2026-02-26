@@ -17,6 +17,7 @@ export interface CellData {
 
 export interface FileInfo {
     fileName: string;
+    filePath: string;
     extension: string;
 }
 
@@ -140,6 +141,25 @@ const App: React.FC = () => {
         };
     }, []);
 
+    // Save state to VS Code API whenever cells change
+    useEffect(() => {
+        if (cells.length > 0 && fileInfo?.filePath) {
+            // Also keep standard webview state just in case of hot reloads during session
+            const prevState = vscode.getState() || {};
+            vscode.setState({
+                ...prevState,
+                [fileInfo.filePath]: { cells: cells.map((c: any) => ({ id: c.id, query: c.query })) }
+            });
+
+            // Send to extension host for persistent storage across tab closures
+            vscode.postMessage({
+                type: 'saveNotebookState',
+                filePath: fileInfo.filePath,
+                cells: cells.map(c => ({ id: c.id, query: c.query }))
+            });
+        }
+    }, [cells, fileInfo]);
+
     // Ref to access latest settings in initializeDuckDB without re-binding
     const settingsRef = React.useRef(settings);
     useEffect(() => {
@@ -152,7 +172,7 @@ const App: React.FC = () => {
     const initializeDuckDB = async (message: any) => {
         try {
             initialMessageRef.current = message;
-            const { fileName, filePath, extension, data, config } = message;
+            const { fileName, filePath, extension, data, config, savedCells } = message;
 
             // Update settings from config if provided
             if (config) {
@@ -212,67 +232,88 @@ const App: React.FC = () => {
                 readCommand = `read_csv_auto('${filePath}', allow_quoted_nulls=false, header=true)`;
             }
 
-            // Cell 1: Setup & Load
-            const cell1Id = `cell-${Date.now()}`;
-            const setupQuery = [
-                `CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM ${readCommand};`,
-                `-- COPY ${tableName} TO '${fileName}_backup.parquet';`
-            ].join('\n');
-
-            const initialCells: CellData[] = [
-                { id: cell1Id, query: setupQuery, status: 'idle' }
-            ];
-
-            // Cell 2: Structure (Conditional)
-            if (currentSettings.showDescribe) {
-                const cell2Id = `cell-${Date.now() + 1}`;
-                initialCells.push({
-                    id: cell2Id,
-                    query: `DESCRIBE ${tableName};`,
-                    status: 'idle'
-                });
+            // Check for saved state (from extension host workspaceState)
+            // Fall back to webview state if extension host didn't send it but webview has it (hot reload scenario)
+            let existingCells = savedCells;
+            if (!existingCells || existingCells.length === 0) {
+                const savedStateAll = vscode.getState() as any;
+                const savedState = savedStateAll ? savedStateAll[filePath] : undefined;
+                if (savedState && savedState.cells && savedState.cells.length > 0) {
+                    existingCells = savedState.cells;
+                }
             }
 
-            // Cell 3: Preview
-            const cell3Id = `cell-${Date.now() + 2}`;
-            const previewQuery = `SELECT * FROM ${tableName} LIMIT ${currentSettings.previewLimit};`;
-            initialCells.push({
-                id: cell3Id,
-                query: previewQuery,
-                status: 'idle'
-            });
+            const hasSavedState = !!(existingCells && existingCells.length > 0);
 
-            // Cell 4: Empty
-            const cell4Id = `cell-${Date.now() + 3}`;
-            initialCells.push({ id: cell4Id, query: '', status: 'idle' });
+            let initialCells: CellData[] = [];
+
+            if (hasSavedState) {
+                initialCells = existingCells.map((c: any) => ({
+                    id: c.id,
+                    query: c.query,
+                    status: 'idle'
+                }));
+            } else {
+                // Cell 1: Setup & Load
+                const cell1Id = `cell-${Date.now()}`;
+                const setupQuery = [
+                    `CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM ${readCommand};`,
+                    `-- COPY ${tableName} TO '${fileName}_backup.parquet';`
+                ].join('\n');
+
+                initialCells.push({ id: cell1Id, query: setupQuery, status: 'idle' });
+
+                // Cell 2: Structure (Conditional)
+                if (currentSettings.showDescribe) {
+                    const cell2Id = `cell-${Date.now() + 1}`;
+                    initialCells.push({
+                        id: cell2Id,
+                        query: `DESCRIBE ${tableName};`,
+                        status: 'idle'
+                    });
+                }
+
+                // Cell 3: Preview
+                const cell3Id = `cell-${Date.now() + 2}`;
+                const previewQuery = `SELECT * FROM ${tableName} LIMIT ${currentSettings.previewLimit};`;
+                initialCells.push({
+                    id: cell3Id,
+                    query: previewQuery,
+                    status: 'idle'
+                });
+
+                // Cell 4: Empty
+                const cell4Id = `cell-${Date.now() + 3}`;
+                initialCells.push({ id: cell4Id, query: '', status: 'idle' });
+            }
 
             setCells(initialCells);
-            setFocusId(cell4Id);
-            setFileInfo({ fileName, extension });
+            setFocusId(initialCells[initialCells.length - 1].id);
+            setFileInfo({ fileName, filePath, extension });
             setDbReady(true);
 
             // Execute Chain
-            // 1. Setup
-            let cell1State: Partial<CellData> = { status: 'running' };
-            setCells(prev => prev.map(c => c.id === cell1Id ? { ...c, ...cell1State } : c));
+            // 1. Setup (First cell)
+            const firstCell = initialCells[0];
+            if (firstCell && firstCell.query) {
+                let cell1State: Partial<CellData> = { status: 'running' };
+                setCells(prev => prev.map(c => c.id === firstCell.id ? { ...c, ...cell1State } : c));
 
-            try {
-                const s1 = performance.now();
-                await conn.query(setupQuery);
-                cell1State = { status: 'success', executionTime: performance.now() - s1 };
-            } catch (e: any) {
-                cell1State = { status: 'error', error: e.message };
+                try {
+                    const s1 = performance.now();
+                    await conn.query(firstCell.query);
+                    cell1State = { status: 'success', executionTime: performance.now() - s1 };
+                } catch (e: any) {
+                    cell1State = { status: 'error', error: e.message };
+                }
+
+                // Update Cell 1 Result
+                setCells(prev => prev.map(c => c.id === firstCell.id ? { ...c, ...cell1State } : c));
+
+                if (cell1State.status !== 'success') return; // Stop if setup failed
             }
 
-            // Update Cell 1 Result
-            setCells(prev => prev.map(c => c.id === cell1Id ? { ...c, ...cell1State } : c));
-
-            if (cell1State.status !== 'success') return; // Stop if setup failed
-
             // Execute remaining cells sequentially
-            // We need to find the IDs we just created.
-            // Since initialCells is local, we can iterate it (skipping first which is setup)
-
             for (let i = 1; i < initialCells.length; i++) {
                 const cell = initialCells[i];
                 if (!cell.query) continue; // Skip empty last cell

@@ -104,12 +104,15 @@ class DuckDBViewerProvider
         const config = vscode.workspace.getConfiguration("duckdb");
         const allowExternalFileAccess = config.get<boolean>("allowExternalFileAccess") ?? false;
 
+        const savedCells = this.context.workspaceState.get(`duckdb_notebook_${filePath}`);
+
         webview.postMessage({
           type: "loadData",
           fileName,
           filePath,
           extension: fileExtension,
           data: buffer,
+          savedCells,
           config: {
             allowExternalFileAccess
           }
@@ -141,6 +144,10 @@ class DuckDBViewerProvider
           } catch (err) {
             vscode.window.showErrorMessage(`Failed to update setting: ${err}`);
           }
+          break;
+        case "saveNotebookState":
+          // Save cells for this file path
+          await this.context.workspaceState.update(`duckdb_notebook_${message.filePath}`, message.cells);
           break;
         case "copyToClipboard":
           if (typeof message.value === "string") {
