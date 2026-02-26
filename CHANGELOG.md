@@ -2,6 +2,12 @@
 
 All notable changes to the DuckDB Notebook extension will be documented in this file.
 
+## [0.0.45] - 2026-02-27
+
+### Added
+- **Multi-cursor Editing**: Support for adding multiple cursors in the SQL editor using `Alt+Click` or `Alt+ArrowUp`/`Alt+ArrowDown`.
+- **Notebook State Persistence**: Notebook state (queries and cells) is now automatically saved and restored when reopening files.
+
 ## [0.0.44] - 2026-02-17
 
 ### Added
