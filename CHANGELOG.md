@@ -2,6 +2,11 @@
 
 All notable changes to the DuckDB Notebook extension will be documented in this file.
 
+## [0.0.47] - 2026-03-15
+
+### Fixed
+- **JSON Viewer Overlap and Overflow**: Fixed an issue where the JSON tree viewer pane overlapped SQL cell editors and copy/export tools while scrolling. Additionally, bounded the viewer height to trigger an inner scroll on short tables to prevent visual overflow in the notebook.
+
 ## [0.0.46] - 2026-03-15
 
 ### Added
