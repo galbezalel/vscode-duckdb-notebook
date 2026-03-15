@@ -398,9 +398,15 @@ tr:hover td {
   background-color: var(--vscode-editor-background);
   border-left: 1px solid var(--vscode-panel-border);
   box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+  z-index: 20;
+}
+
+.json-drawer-inner {
+  position: sticky;
+  top: var(--sticky-offset, 0px);
   display: flex;
   flex-direction: column;
-  z-index: 100;
+  max-height: min(100%, calc(100vh - var(--sticky-offset, 0px) - 60px));
 }
 
 .json-drawer-header {

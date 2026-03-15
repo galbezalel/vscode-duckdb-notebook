@@ -203,14 +203,16 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
         <div className="table-result-container" style={{ position: 'relative' }}>
             {selectedData && (
                 <div className="json-drawer">
-                    <div className="json-drawer-header">
-                        <span className="drawer-title">JSON Viewer</span>
-                        <button className="icon-btn" onClick={() => setSelectedData(null)}>
-                            <X size={16} />
-                        </button>
-                    </div>
-                    <div className="json-drawer-content">
-                        <JsonTree data={selectedData} expandAll={true} />
+                    <div className="json-drawer-inner">
+                        <div className="json-drawer-header">
+                            <span className="drawer-title">JSON Viewer</span>
+                            <button className="icon-btn" onClick={() => setSelectedData(null)}>
+                                <X size={16} />
+                            </button>
+                        </div>
+                        <div className="json-drawer-content">
+                            <JsonTree data={selectedData} expandAll={true} />
+                        </div>
                     </div>
                 </div>
             )}
