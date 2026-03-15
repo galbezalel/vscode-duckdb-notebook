@@ -2,6 +2,20 @@
 
 All notable changes to the DuckDB Notebook extension will be documented in this file.
 
+## [0.0.46] - 2026-03-15
+
+### Added
+- **Sticky Headers**: The SQL editor and table headers now dynamically stick to the top of the viewing area while scrolling through large files, ensuring column names and queries remain visible.
+- **Configurable Result Limits**: Added a user setting (`duckdb.displayRowLimit`) to control the physical height of the scrollable results table viewport without forcefully modifying the underlying SQL row execution count.
+
+### Changed
+- **Performance**: Removed the hardcoded 30-row `LIMIT` injection from the SQL execution engine. The DataGrid now cleanly queries and fetches full database returns natively.
+- **Virtual DOM Render**: The ResultTable now implements a massive-data Virtual Scroller to accurately support queries with millions of rows without locking the browser UI or overflowing V8 DOM limits.
+
+### Fixed
+- **Query Execution Hanging**: Fixed a major bug where pressing the "Stop" or "Trash" button during a heavy data load would fail to cancel the request and lock the notebook indefinitely. The IPC engine now chunks and yields asynchronously back to the UI thread.
+- **Z-Index Visual Bleeding**: Fixed an issue where the background table data layout overrode its bounds, clipping backward into the top toolbar or bleeding out from underneath the SQL Editor input box.
+
 ## [0.0.45] - 2026-02-27
 
 ### Added

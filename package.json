@@ -3,7 +3,7 @@
   "displayName": "DuckDB Notebook",
   "icon": "icon.png",
   "description": "Open CSV and Parquet files with a DuckDB-backed Notebook interface.",
-  "version": "0.0.45",
+  "version": "0.0.46",
   "publisher": "galbezalel",
   "license": "MIT",
   "engines": {
@@ -17,10 +17,6 @@
     "Other"
   ],
   "main": "./out/extension.js",
-  "activationEvents": [
-    "onCustomEditor:duckdb.csvViewer",
-    "onCustomEditor:duckdb.parquetViewer"
-  ],
   "contributes": {
     "customEditors": [
       {
