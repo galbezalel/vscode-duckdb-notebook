@@ -8,6 +8,7 @@ interface ResultTableProps {
     onOpenUrl: (url: string) => void;
     forceJsonParsing: boolean;
     enableTextWrap: boolean;
+    displayRowLimit: number;
 }
 
 const isUrl = (text: string): boolean => {
@@ -91,10 +92,13 @@ const JsonTree: React.FC<JsonTreeProps> = ({ data, label, expandAll = false }) =
     );
 };
 
-const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, forceJsonParsing, columnTypes, enableTextWrap }) => {
+const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, forceJsonParsing, columnTypes, enableTextWrap, displayRowLimit }) => {
     const [colWidths, setColWidths] = useState<number[]>([]);
     const [selectedData, setSelectedData] = useState<any | null>(null);
     const [tooltip, setTooltip] = useState<{ visible: boolean; x: number; y: number; content: string } | null>(null);
+
+    const [scrollTop, setScrollTop] = useState(0);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     const calculateColumnWidths = (cols: string[], data: any[]) => {
         const MIN_WIDTH = 100;
@@ -224,34 +228,94 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
             )}
 
             <div className="table-wrapper">
-                <div className="table-inner" style={{ minWidth: totalWidth }}>
-                    <table className="header-table" style={{ width: totalWidth }}>
-                        <colgroup>
-                            {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
-                        </colgroup>
-                        <thead>
-                            <tr>
-                                {columns.map((col, i) => (
-                                    <HeaderCell
-                                        key={i}
-                                        label={col}
-                                        width={colWidths[i]}
-                                        onResize={(w) => handleResize(i, w)}
-                                    />
-                                ))}
-                            </tr>
-                        </thead>
-                    </table>
-                    <div className="body-scroll-container" style={{ overflowX: 'hidden' }}>
+                <div className="table-inner">
+                    <div 
+                        className="header-scroll-container" 
+                        style={{ overflowX: 'hidden' }}
+                        ref={(el) => {
+                            if (el) {
+                                (el as any)._isScrolling = false;
+                                // We will sync from body to header, not header to body usually,
+                                // because header uses overflow: hidden to hide scrollbar, but we can still scroll it via JS.
+                            }
+                        }}
+                    >
+                        <table className="header-table" style={{ width: totalWidth }}>
+                            <colgroup>
+                                {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    {columns.map((col, i) => (
+                                        <HeaderCell
+                                            key={i}
+                                            label={col}
+                                            width={colWidths[i]}
+                                            onResize={(w) => handleResize(i, w)}
+                                        />
+                                    ))}
+                                </tr>
+                            </thead>
+                        </table>
+                    </div>
+                    <div 
+                        className="body-scroll-container" 
+                        ref={scrollContainerRef}
+                        style={{ overflowX: 'auto', maxHeight: displayRowLimit > 0 ? `${displayRowLimit * 28 + 15}px` : 'none' }}
+                        onScroll={(e) => {
+                            const target = e.currentTarget;
+                            setScrollTop(target.scrollTop);
+                            const headerContainer = target.previousElementSibling as HTMLElement;
+                            if (headerContainer) {
+                                headerContainer.scrollLeft = target.scrollLeft;
+                            }
+                        }}
+                    >
                         <table className="body-table" style={{ width: totalWidth }}>
                             <colgroup>
                                 {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
                             </colgroup>
                             <tbody>
-                                {rows.map((row, i) => (
-                                    <tr key={i}>
-                                        {columns.map((col, j) => {
-                                            const rawValue = row[col];
+                                {(() => {
+                                    if (rows.length === 0) return null;
+                                    
+                                    const ROW_HEIGHT = 28;
+                                    const BROWSER_MAX_HEIGHT = 1500000; // Browsers start breaking deeply nested layout ~1.5m-3m px
+
+                                    // Check if massive table, cap visual scroll height to prevent flex bounds breaking 
+                                    const virtualRowsLength = Math.min(rows.length, 50000); 
+                                    
+                                    const buffer = 15;
+                                    const visibleCount = displayRowLimit > 0 ? displayRowLimit : 30;
+                                    
+                                    let startIndex = Math.floor(scrollTop / ROW_HEIGHT) - buffer;
+                                    if (startIndex < 0) startIndex = 0;
+                                    
+                                    let endIndex = startIndex + visibleCount + (buffer * 2);
+                                    if (endIndex > rows.length) endIndex = rows.length;
+
+                                    const visibleRows = rows.slice(startIndex, endIndex);
+
+                                    // We must simulate the total scrollable height so the scrollbar represents all rows
+                                    const topPadding = startIndex * ROW_HEIGHT;
+                                    const bottomPadding = Math.max(0, (rows.length - endIndex) * ROW_HEIGHT);
+
+                                    // Extremely large dom heights break browsers. Cap padding.
+                                    const cappedBottomPadding = Math.min(bottomPadding, BROWSER_MAX_HEIGHT - topPadding);
+
+                                    return (
+                                        <>
+                                            {topPadding > 0 && (
+                                                <tr style={{ height: topPadding }}>
+                                                    <td colSpan={columns.length} style={{ padding: 0, border: 0 }}></td>
+                                                </tr>
+                                            )}
+                                            {visibleRows.map((row, indexOffset) => {
+                                                const i = startIndex + indexOffset;
+                                                return (
+                                                    <tr key={i} style={{ height: ROW_HEIGHT }}>
+                                                        {columns.map((col, j) => {
+                                                            const rawValue = row[col];
 
                                             // Explicit check for null
                                             if (rawValue === null) {
@@ -332,15 +396,30 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
                                                         >
                                                             {cellValue}
                                                         </a>
-                                                    ) : (
-                                                        cellValue
-                                                    )}
-                                                </td>
-                                            );
-                                        })}
+                                                        ) : (
+                                                            cellValue
+                                                        )}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    );
+                                })}
+                                {cappedBottomPadding > 0 && (
+                                    <tr style={{ height: cappedBottomPadding }}>
+                                        <td colSpan={columns.length} style={{ padding: 0, border: 0 }}>
+                                            {rows.length > 50000 && endIndex >= 50000 && (
+                                                <div style={{ padding: 10, color: 'var(--vscode-descriptionForeground)', textAlign: 'center' }}>
+                                                    Scroll view limited to {rows.length.toLocaleString()} items to preserve performance.
+                                                </div>
+                                            )}
+                                        </td>
                                     </tr>
-                                ))}
-                            </tbody>
+                                )}
+                            </>
+                        );
+                    })()}
+                    </tbody>
                         </table>
                     </div>
                 </div>

@@ -40,13 +40,16 @@ const App: React.FC = () => {
     const [cells, setCells] = useState<CellData[]>([]);
     const [focusId, setFocusId] = useState<string | null>(null);
 
+    const cancelTokens = useRef<Record<string, boolean>>({});
+
     const [showSettings, setShowSettings] = useState(false);
     const [settings, setSettings] = useState({
         showDescribe: true,
         previewLimit: 5,
         forceJsonParsing: false,
         allowExternalFileAccess: false,
-        enableTextWrap: false
+        enableTextWrap: false,
+        displayRowLimit: 30
     });
 
     // File Access Request Handling
@@ -172,7 +175,7 @@ const App: React.FC = () => {
     const initializeDuckDB = async (message: any) => {
         try {
             initialMessageRef.current = message;
-            const { fileName, filePath, extension, data, config, savedCells } = message;
+            const { fileName, filePath, extension, data, config, savedCells, isRecovery } = message;
 
             // Update settings from config if provided
             if (config) {
@@ -292,6 +295,11 @@ const App: React.FC = () => {
             setFileInfo({ fileName, filePath, extension });
             setDbReady(true);
 
+            if (isRecovery) {
+                // On recovery, do not auto-execute anything so we don't hang again
+                return;
+            }
+
             // Execute Chain
             // 1. Setup (First cell)
             const firstCell = initialCells[0];
@@ -324,10 +332,26 @@ const App: React.FC = () => {
                 try {
                     const s = performance.now();
                     const res = await conn.query(cell.query);
-                    const rows = res.toArray().map((r: any) => r.toJSON());
                     const columns = res.schema.fields.map((f: any) => f.name);
                     const columnTypes = res.schema.fields.map((f: any) => String(f.type));
-                    cellState = { status: 'success', rows, columns, columnTypes, executionTime: performance.now() - s };
+                    
+                    const rows: any[] = [];
+                    for (const batch of res.batches) {
+                        if (cancelTokens.current[cell.id]) break;
+                        const batchRows = batch.toArray();
+                        for (let j = 0; j < batchRows.length; j += 1000) {
+                            if (cancelTokens.current[cell.id]) break;
+                            const chunk = batchRows.slice(j, j + 1000).map((r: any) => r.toJSON());
+                            rows.push(...chunk);
+                            await new Promise(resolve => setTimeout(resolve, 0));
+                        }
+                    }
+
+                    if (cancelTokens.current[cell.id]) {
+                        cellState = { status: 'idle', error: 'Execution cancelled' };
+                    } else {
+                        cellState = { status: 'success', rows, columns, columnTypes, executionTime: performance.now() - s };
+                    }
                 } catch (e: any) {
                     cellState = { status: 'error', error: e.message };
                 }
@@ -345,33 +369,33 @@ const App: React.FC = () => {
         const cell = cells.find(c => c.id === id);
         if (!cell || cell.status !== 'running') return;
 
+        cancelTokens.current[id] = true;
+
         // Visual update immediately
         updateCell(id, { status: 'idle', error: 'Execution cancelled' });
 
-        // Terminate worker
+        // Terminate worker forcibly using Javascript standard Web Worker API
         try {
             const worker = (window as any).duckdbWorker;
             if (worker) {
                 worker.terminate();
             }
-            const db = (window as any).duckdbInstance;
-            if (db) {
-                await db.terminate();
-            }
         } catch (e) {
-            console.error("Error terminating worker:", e);
+            console.error("Worker termination failed", e);
         }
 
         setDbReady(false);
-        (window as any).duckdbConnection = null;
-        (window as any).duckdbInstance = null;
-        (window as any).duckdbWorker = null;
+
+        // Delete references explicitly
+        delete (window as any).duckdbConnection;
+        delete (window as any).duckdbInstance;
+        delete (window as any).duckdbWorker;
 
         // Re-initialize if we have the initial data
         if (initialMessageRef.current) {
             // Small delay to ensure clean termination
             setTimeout(() => {
-                initializeDuckDB(initialMessageRef.current);
+                initializeDuckDB({ ...initialMessageRef.current, isRecovery: true });
             }, 100);
         }
     };
@@ -408,6 +432,8 @@ const App: React.FC = () => {
         const cell = cells.find(c => c.id === id);
         if (!cell || !dbReady) return;
 
+        cancelTokens.current[id] = false;
+
         updateCell(id, { status: 'running', error: undefined });
         const startTime = performance.now();
 
@@ -422,45 +448,69 @@ const App: React.FC = () => {
             }
 
             const executeQuery = async (): Promise<any> => {
-                try {
-                    return await conn.query(cell.query);
-                } catch (err: any) {
-                    const errorMsg = err.message || '';
-                    // IO Error: No files found that match the pattern "/Users/..."
-                    const match = errorMsg.match(/IO Error: No files found that match the pattern "([^"]+)"/);
-                    if (match && match[1]) {
-                        // Found external file access attempt
-                        const filePath = match[1];
-                        console.log(`Intercepted file access request: ${filePath}`);
-
-                        // Request access from extension host
-                        try {
-                            // 1. Request file content
-                            const buffer = await requestFileAccess(filePath);
-
-                            // 2. Register file in DuckDB
-                            const db = (window as any).duckdbInstance;
-                            await db.registerFileBuffer(filePath, buffer);
-
-                            // 3. Retry query
-                            return await conn.query(cell.query);
-                        } catch (accessErr: any) {
-                            // User denied or failed
-                            throw new Error(`File Access Denied: ${accessErr.message}`);
+                return new Promise((resolve, reject) => {
+                    // Check cancellation flag repeatedly since DuckDB blocks worker threads
+                    const interval = setInterval(() => {
+                        if (cancelTokens.current[id]) {
+                            clearInterval(interval);
+                            reject(new Error('Execution cancelled'));
                         }
-                    } else {
-                        throw err;
-                    }
-                }
+                    }, 100);
+
+                    const runAttempt = async () => {
+                        try {
+                            const res = await conn.query(cell.query);
+                            clearInterval(interval);
+                            resolve(res);
+                        } catch (err: any) {
+                            const errorMsg = err.message || '';
+                            const match = errorMsg.match(/IO Error: No files found that match the pattern "([^"]+)"/);
+                            if (match && match[1]) {
+                                const filePath = match[1];
+                                try {
+                                    const buffer = await requestFileAccess(filePath);
+                                    const db = (window as any).duckdbInstance;
+                                    await db.registerFileBuffer(filePath, buffer);
+                                    const retryRes = await conn.query(cell.query);
+                                    clearInterval(interval);
+                                    resolve(retryRes);
+                                } catch (accessErr: any) {
+                                    clearInterval(interval);
+                                    reject(new Error(`File Access Denied: ${accessErr.message}`));
+                                }
+                            } else {
+                                clearInterval(interval);
+                                reject(err);
+                            }
+                        }
+                    };
+
+                    runAttempt();
+                });
             };
 
             const result = await executeQuery();
 
-            // Check if it's a command that doesn't return rows (like CREATE VIEW)
-            // DuckDB WASM result might still have toArray but empty
-            const rows = result.toArray().map((row: any) => row.toJSON());
+            if (cancelTokens.current[id]) {
+                return;
+            }
+
             const columns = result.schema.fields.map((f: any) => f.name);
             const columnTypes = result.schema.fields.map((f: any) => String(f.type));
+
+            const rows: any[] = [];
+            const CHUNK_SIZE = 1000;
+            for (const batch of result.batches) {
+                if (cancelTokens.current[id]) return;
+                const batchRows = batch.toArray();
+                for (let i = 0; i < batchRows.length; i += CHUNK_SIZE) {
+                    if (cancelTokens.current[id]) return;
+                    const chunk = batchRows.slice(i, i + CHUNK_SIZE).map((row: any) => row.toJSON());
+                    rows.push(...chunk);
+                    // Yield to macrotask cleanly using setTimeout so click event handlers for the Stop/Delete buttons can penetrate heavy UI locks
+                    await new Promise(r => setTimeout(r, 0));
+                }
+            }
 
             updateCell(id, {
                 status: 'success',
@@ -672,6 +722,7 @@ const App: React.FC = () => {
                     onReorder={handleReorder}
                     forceJsonParsing={settings.forceJsonParsing}
                     enableTextWrap={settings.enableTextWrap}
+                    displayRowLimit={settings.displayRowLimit}
                 />
             </main>
             <SettingsModal

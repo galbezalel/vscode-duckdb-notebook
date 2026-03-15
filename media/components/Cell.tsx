@@ -20,9 +20,10 @@ interface CellProps {
     isLast: boolean;
     forceJsonParsing: boolean;
     enableTextWrap: boolean;
+    displayRowLimit: number;
 }
 
-const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdvance, onUpdate, onRemove, onExport, onCopy, onOpenUrl, forceJsonParsing, enableTextWrap }) => {
+const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdvance, onUpdate, onRemove, onExport, onCopy, onOpenUrl, forceJsonParsing, enableTextWrap, displayRowLimit }) => {
     const {
         attributes,
         listeners,
@@ -34,6 +35,9 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdv
 
     const cellRef = React.useRef<HTMLDivElement>(null);
 
+    const [stickyOffset, setStickyOffset] = React.useState(0);
+    const stickyTopRef = React.useRef<HTMLDivElement>(null);
+
     React.useEffect(() => {
         if (autoFocus && cellRef.current) {
             // Scroll to the cell when it gets focus
@@ -41,13 +45,29 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdv
         }
     }, [autoFocus]);
 
+    // Track the height of the sticky top section to offset the table headers correctly
+    React.useEffect(() => {
+        if (!stickyTopRef.current) return;
+        
+        const observer = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                setStickyOffset(entry.contentRect.height);
+            }
+        });
+        
+        observer.observe(stickyTopRef.current);
+        
+        return () => observer.disconnect();
+    }, []);
+
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.5 : 1,
         zIndex: isDragging ? 999 : 'auto',
         position: 'relative' as const,
-    };
+        '--sticky-offset': `${stickyOffset}px`
+    } as React.CSSProperties;
 
     // Combine dnd-kit ref and local ref
     const setRefs = (node: HTMLDivElement | null) => {
@@ -57,58 +77,60 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdv
 
     return (
         <div ref={setRefs} style={style} className={`cell ${data.status}`}>
-            <div className="cell-header" {...attributes} {...listeners} style={{ cursor: 'grab' }}>
-                <div className="cell-status">
-                    {data.status === 'running' && <div className="spinner" />}
-                    {data.status === 'success' && <CheckCircle2 size={14} className="text-success" />}
-                    {data.status === 'error' && <AlertCircle size={14} className="text-error" />}
-                    <span className="status-text">
-                        {data.status === 'idle' ? 'Ready' :
-                            data.status === 'running' ? 'Running...' :
-                                data.status === 'success' ? `Finished in ${data.executionTime?.toFixed(2)}ms ${data.rows ? `(${data.rows.length} rows)` : ''}` : 'Error'}
-                    </span>
-                </div>
-                <div className="cell-actions" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-                    {data.status === 'running' ? (
-                        <button onClick={onStop} className="icon-btn stop-btn" title="Stop Execution">
-                            <Square size={14} fill="currentColor" />
+            <div className="cell-sticky-top" ref={stickyTopRef}>
+                <div className="cell-header" {...attributes} {...listeners} style={{ cursor: 'grab' }}>
+                    <div className="cell-status">
+                        {data.status === 'running' && <div className="spinner" />}
+                        {data.status === 'success' && <CheckCircle2 size={14} className="text-success" />}
+                        {data.status === 'error' && <AlertCircle size={14} className="text-error" />}
+                        <span className="status-text">
+                            {data.status === 'idle' ? 'Ready' :
+                                data.status === 'running' ? 'Running...' :
+                                    data.status === 'success' ? `Finished in ${data.executionTime?.toFixed(2)}ms ${data.rows ? `(${data.rows.length} rows)` : ''}` : 'Error'}
+                        </span>
+                    </div>
+                    <div className="cell-actions" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                        {data.status === 'running' ? (
+                            <button onClick={onStop} className="icon-btn stop-btn" title="Stop Execution">
+                                <Square size={14} fill="currentColor" />
+                            </button>
+                        ) : (data.status === 'success' && (
+                            <>
+                                <button onClick={() => onExport('csv')} title="Export as CSV">
+                                    <FileOutput size={14} />
+                                    <span>.csv</span>
+                                </button>
+                                <button onClick={() => onExport('parquet')} title="Export as Parquet">
+                                    <Download size={14} />
+                                    <span>.parquet</span>
+                                </button>
+                                <button onClick={onCopy} title="Copy as CSV">
+                                    <Copy size={14} />
+                                    <span>copy</span>
+                                </button>
+                                <div className="divider" />
+                            </>
+                        ))}
+                        {data.status !== 'running' && (
+                            <button onClick={onRun} className="icon-btn run-btn" title="Run (Cmd+Enter)">
+                                <Play size={14} />
+                            </button>
+                        )}
+                        <button onClick={onRemove} className="icon-btn delete-btn" title="Delete Cell">
+                            <Trash2 size={14} />
                         </button>
-                    ) : (data.status === 'success' && (
-                        <>
-                            <button onClick={() => onExport('csv')} title="Export as CSV">
-                                <FileOutput size={14} />
-                                <span>.csv</span>
-                            </button>
-                            <button onClick={() => onExport('parquet')} title="Export as Parquet">
-                                <Download size={14} />
-                                <span>.parquet</span>
-                            </button>
-                            <button onClick={onCopy} title="Copy as CSV">
-                                <Copy size={14} />
-                                <span>copy</span>
-                            </button>
-                            <div className="divider" />
-                        </>
-                    ))}
-                    {data.status !== 'running' && (
-                        <button onClick={onRun} className="icon-btn run-btn" title="Run (Cmd+Enter)">
-                            <Play size={14} />
-                        </button>
-                    )}
-                    <button onClick={onRemove} className="icon-btn delete-btn" title="Delete Cell">
-                        <Trash2 size={14} />
-                    </button>
+                    </div>
                 </div>
-            </div>
 
-            <div className="cell-editor">
-                <SqlEditor
-                    value={data.query}
-                    autoFocus={autoFocus}
-                    onChange={(val) => onUpdate({ query: val })}
-                    onRun={onRun}
-                    onRunAndAdvance={onRunAndAdvance}
-                />
+                <div className="cell-editor">
+                    <SqlEditor
+                        value={data.query}
+                        autoFocus={autoFocus}
+                        onChange={(val) => onUpdate({ query: val })}
+                        onRun={onRun}
+                        onRunAndAdvance={onRunAndAdvance}
+                    />
+                </div>
             </div>
 
             {
@@ -123,7 +145,7 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdv
             {
                 data.status === 'success' && data.columns && (
                     <div className="cell-results">
-                        <ResultTable columns={data.columns} rows={data.rows || []} columnTypes={data.columnTypes} onOpenUrl={onOpenUrl} forceJsonParsing={forceJsonParsing} enableTextWrap={enableTextWrap} />
+                        <ResultTable columns={data.columns} rows={data.rows || []} columnTypes={data.columnTypes} onOpenUrl={onOpenUrl} forceJsonParsing={forceJsonParsing} enableTextWrap={enableTextWrap} displayRowLimit={displayRowLimit} />
                     </div>
                 )
             }

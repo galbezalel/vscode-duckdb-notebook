@@ -51,6 +51,11 @@
           "type": "boolean",
           "default": false,
           "description": "Allow DuckDB to access files outside the virtual filesystem (e.g. read_csv('/abs/path.csv')). Security warning: verifying this allows reading any file the user has access to."
+        },
+        "duckdb.displayRowLimit": {
+          "type": "number",
+          "default": 30,
+          "description": "The maximum number of rows to display in the result table before forcing a scroll layout. (Set roughly ~30 rows height)"
         }
       }
     }

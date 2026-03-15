@@ -7,6 +7,7 @@ interface Settings {
     forceJsonParsing: boolean;
     allowExternalFileAccess: boolean;
     enableTextWrap: boolean;
+    displayRowLimit: number;
 }
 
 interface SettingsModalProps {
@@ -67,6 +68,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                                 className="number-input"
                             />
                             <p className="setting-desc">Number of rows to fetch in the initial preview.</p>
+                        </div>
+                        <div className="setting-item">
+                            <label>Display Row Limit</label>
+                            <input
+                                type="number"
+                                value={localSettings.displayRowLimit}
+                                onChange={(e) => handleChange('displayRowLimit', parseInt(e.target.value) || 0)}
+                                min="1"
+                                className="number-input"
+                            />
+                            <p className="setting-desc">The visual height of the results table in rows before scrolling.</p>
                         </div>
                     </div>
 

@@ -35,9 +35,10 @@ interface NotebookProps {
     onReorder: (activeId: string, overId: string) => void;
     forceJsonParsing: boolean;
     enableTextWrap: boolean;
+    displayRowLimit: number;
 }
 
-const Notebook: React.FC<NotebookProps> = ({ cells, focusId, onRun, onStop, onRunAndAdvance, onUpdate, onRemove, onExport, onCopy, onOpenUrl, onAdd, onReorder, forceJsonParsing, enableTextWrap }) => {
+const Notebook: React.FC<NotebookProps> = ({ cells, focusId, onRun, onStop, onRunAndAdvance, onUpdate, onRemove, onExport, onCopy, onOpenUrl, onAdd, onReorder, forceJsonParsing, enableTextWrap, displayRowLimit }) => {
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
@@ -84,6 +85,7 @@ const Notebook: React.FC<NotebookProps> = ({ cells, focusId, onRun, onStop, onRu
                                 isLast={index === cells.length - 1}
                                 forceJsonParsing={forceJsonParsing}
                                 enableTextWrap={enableTextWrap}
+                                displayRowLimit={displayRowLimit}
                             />
                             <div className="cell-separator" onClick={() => onAdd(index + 1)}>
                                 <div className="separator-line" />
