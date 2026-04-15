@@ -2,6 +2,14 @@
 
 All notable changes to the DuckDB Notebook extension will be documented in this file.
 
+## [0.0.48] - 2026-04-15
+
+### Added
+- **Collapsible Queries**: Added the ability to collapse the query editor within notebook cells using a chevron in the header. When collapsed, the cell will cleanly display a single truncated line from the query for context.
+
+### Fixed
+- **DuckDB Export Crash**: Fixed an issue causing data exports to `.csv` or `.parquet` to completely crash the UI due to global state error handling replacing the app view. Also resolved the underlying DuckDB syntax error that caused the export to fail when SQL queries ended with trailing single-line comments.
+
 ## [0.0.47] - 2026-03-15
 
 ### Fixed
