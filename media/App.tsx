@@ -608,7 +608,7 @@ const App: React.FC = () => {
             if (!conn) throw new Error("Database not connected");
 
             const fileName = `export_${Date.now()}.${format}`;
-            const cleanQuery = cell.query.trim().replace(/;$/, '');
+            const cleanQuery = cell.query.replace(/--.*$/gm, '').trim().replace(/;$/, '');
             const copyQuery = `COPY (${cleanQuery}) TO '${fileName}' (FORMAT ${format.toUpperCase()})`;
 
             await conn.query(copyQuery);
@@ -637,7 +637,7 @@ const App: React.FC = () => {
 
         } catch (err: any) {
             console.error("Export failed:", err);
-            setDbError("Export failed: " + err.message);
+            updateCell(id, { status: 'error', error: "Export failed: " + err.message });
         }
     };
 
@@ -673,7 +673,7 @@ const App: React.FC = () => {
             });
         } catch (err: any) {
             console.error("Copy failed:", err);
-            setDbError("Copy failed: " + err.message);
+            updateCell(id, { status: 'error', error: "Copy failed: " + err.message });
         }
     };
 
