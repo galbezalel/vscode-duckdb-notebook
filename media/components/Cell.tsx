@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Trash2, Clock, AlertCircle, CheckCircle2, Download, FileOutput, Copy, Square } from 'lucide-react';
+import { Play, Trash2, Clock, AlertCircle, CheckCircle2, Download, FileOutput, Copy, Square, ChevronDown, ChevronRight } from 'lucide-react';
 import { CellData } from '../App';
 import SqlEditor from './SqlEditor';
 import ResultTable from './ResultTable';
@@ -37,6 +37,7 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdv
 
     const [stickyOffset, setStickyOffset] = React.useState(0);
     const stickyTopRef = React.useRef<HTMLDivElement>(null);
+    const [isCollapsed, setIsCollapsed] = React.useState(false);
 
     React.useEffect(() => {
         if (autoFocus && cellRef.current) {
@@ -79,8 +80,21 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdv
         <div ref={setRefs} style={style} className={`cell ${data.status}`}>
             <div className="cell-sticky-top" ref={stickyTopRef}>
                 <div className="cell-header" {...attributes} {...listeners} style={{ cursor: 'grab' }}>
-                    <div className="cell-status">
-                        {data.status === 'running' && <div className="spinner" />}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <button 
+                            className="icon-btn" 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setIsCollapsed(!isCollapsed);
+                            }}
+                            onPointerDown={(e) => e.stopPropagation()} 
+                            onKeyDown={(e) => e.stopPropagation()}
+                            title={isCollapsed ? "Expand Query" : "Collapse Query"}
+                        >
+                            {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                        </button>
+                        <div className="cell-status">
+                            {data.status === 'running' && <div className="spinner" />}
                         {data.status === 'success' && <CheckCircle2 size={14} className="text-success" />}
                         {data.status === 'error' && <AlertCircle size={14} className="text-error" />}
                         <span className="status-text">
@@ -88,6 +102,7 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdv
                                 data.status === 'running' ? 'Running...' :
                                     data.status === 'success' ? `Finished in ${data.executionTime?.toFixed(2)}ms ${data.rows ? `(${data.rows.length} rows)` : ''}` : 'Error'}
                         </span>
+                    </div>
                     </div>
                     <div className="cell-actions" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                         {data.status === 'running' ? (
@@ -122,15 +137,21 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdv
                     </div>
                 </div>
 
-                <div className="cell-editor">
-                    <SqlEditor
-                        value={data.query}
-                        autoFocus={autoFocus}
-                        onChange={(val) => onUpdate({ query: val })}
-                        onRun={onRun}
-                        onRunAndAdvance={onRunAndAdvance}
-                    />
-                </div>
+                {isCollapsed ? (
+                    <div className="cell-editor collapsed-query" onClick={() => setIsCollapsed(false)} style={{ padding: '8px 12px', fontSize: '13px', color: 'var(--vscode-descriptionForeground)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'var(--vscode-editor-font-family)', cursor: 'pointer', borderBottom: '1px solid var(--vscode-panel-border)' }}>
+                        {data.query.trim().split('\n')[0] || "Empty query"}
+                    </div>
+                ) : (
+                    <div className="cell-editor">
+                        <SqlEditor
+                            value={data.query}
+                            autoFocus={autoFocus}
+                            onChange={(val) => onUpdate({ query: val })}
+                            onRun={onRun}
+                            onRunAndAdvance={onRunAndAdvance}
+                        />
+                    </div>
+                )}
             </div>
 
             {
