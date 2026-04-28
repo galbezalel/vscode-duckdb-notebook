@@ -2,6 +2,11 @@
 
 All notable changes to the DuckDB Notebook extension will be documented in this file.
 
+## [0.0.49] - 2026-04-28
+
+### Added
+- **Open in Notebook Button**: Added an "Open in DuckDB Notebook" button to the editor title navigation bar. This provides a quick way to switch from the raw text view to the notebook interface for `.csv` and `.parquet` files.
+
 ## [0.0.48] - 2026-04-15
 
 ### Added
