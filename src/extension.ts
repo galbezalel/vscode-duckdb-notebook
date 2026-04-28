@@ -365,6 +365,24 @@ class DuckDBViewerProvider
 
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(DuckDBViewerProvider.register(context));
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('duckdb.openNotebook', (uri?: vscode.Uri) => {
+      let targetUri = uri;
+      if (!targetUri && vscode.window.activeTextEditor) {
+        targetUri = vscode.window.activeTextEditor.document.uri;
+      }
+      if (targetUri) {
+        const ext = path.extname(targetUri.fsPath).toLowerCase();
+        if (ext === '.csv' || ext === '.parquet') {
+          const viewType = ext === '.csv' ? 'duckdb.csvViewer' : 'duckdb.parquetViewer';
+          vscode.commands.executeCommand('vscode.openWith', targetUri, viewType);
+        } else {
+          vscode.window.showErrorMessage('DuckDB Notebook only supports .csv and .parquet files.');
+        }
+      }
+    })
+  );
 }
 
 export function deactivate(): void {

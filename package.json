@@ -18,6 +18,22 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "duckdb.openNotebook",
+        "title": "Open in DuckDB Notebook",
+        "icon": "$(notebook)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "duckdb.openNotebook",
+          "when": "resourceExtname == .csv || resourceExtname == .parquet",
+          "group": "navigation"
+        }
+      ]
+    },
     "customEditors": [
       {
         "viewType": "duckdb.csvViewer",
