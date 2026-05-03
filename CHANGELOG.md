@@ -2,6 +2,13 @@
 
 All notable changes to the DuckDB Notebook extension will be documented in this file.
 
+## [0.0.50] - 2026-05-03
+
+### Fixed
+- **DuckDB Initialization Hang**: Fixed a critical issue where the extension would hang on "Loading DuckDB..." in newer versions of VS Code due to Web Worker Service Worker interception bugs and WASM MIME type restrictions.
+- **Improved Logging**: Added a dedicated "DuckDB" Output Channel and detailed initialization logs to facilitate easier debugging.
+
+
 ## [0.0.49] - 2026-04-28
 
 ### Added
