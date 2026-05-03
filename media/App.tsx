@@ -202,16 +202,30 @@ const App: React.FC = () => {
                 mainWorker: paths.worker,
             };
 
+            vscode.postMessage({ type: 'log', message: 'Initializing DuckDB...' });
+            const workerResponse = await fetch(bundle.mainWorker);
+            const workerScript = await workerResponse.text();
+
             const workerUrl = URL.createObjectURL(
-                new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' })
+                new Blob([workerScript], { type: 'application/javascript' })
             );
             const worker = new Worker(workerUrl);
+            worker.onerror = (e) => vscode.postMessage({ type: 'log', message: `Worker error: ${e.message}` });
             URL.revokeObjectURL(workerUrl);
+            
             (window as any).duckdbWorker = worker; // Store worker for termination
 
             const logger = new duckdb.ConsoleLogger();
             const db = new duckdb.AsyncDuckDB(logger, worker);
-            await db.instantiate(bundle.mainModule);
+            
+            vscode.postMessage({ type: 'log', message: 'Fetching DuckDB WASM...' });
+            const wasmResponse = await fetch(bundle.mainModule);
+            const wasmBuffer = await wasmResponse.arrayBuffer();
+            const wasmBlobUrl = URL.createObjectURL(new Blob([wasmBuffer], { type: 'application/wasm' }));
+            
+            vscode.postMessage({ type: 'log', message: 'Instantiating DuckDB WASM...' });
+            await db.instantiate(wasmBlobUrl);
+            vscode.postMessage({ type: 'log', message: 'DuckDB instantiated successfully.' });
 
             const conn = await db.connect();
 
@@ -360,6 +374,7 @@ const App: React.FC = () => {
 
         } catch (err: any) {
             console.error(err);
+            vscode.postMessage({ type: 'log', message: `Initialization failed: ${err.message}` });
             setDbError(err.message);
         }
     };

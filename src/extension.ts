@@ -300,6 +300,12 @@ class DuckDBViewerProvider
             });
           }
           break;
+        case "log":
+          if (!(global as any).duckdbOutputChannel) {
+             (global as any).duckdbOutputChannel = vscode.window.createOutputChannel("DuckDB");
+          }
+          (global as any).duckdbOutputChannel.appendLine(`[Webview] ${message.message}`);
+          break;
         default:
           break;
       }
@@ -322,11 +328,11 @@ class DuckDBViewerProvider
     const nonce = this.getNonce();
     const csp = [
       "default-src 'none'",
-      `img-src ${webview.cspSource} data:`,
+      `img-src ${webview.cspSource} data: blob:`,
       `style-src ${webview.cspSource} 'unsafe-inline'`,
-      `script-src ${webview.cspSource} 'nonce-${nonce}' 'wasm-unsafe-eval'`,
-      `connect-src ${webview.cspSource}`,
-      `worker-src ${webview.cspSource} blob:`,
+      `script-src ${webview.cspSource} 'nonce-${nonce}' 'wasm-unsafe-eval' 'unsafe-eval' blob:`,
+      `connect-src ${webview.cspSource} data: blob:`,
+      `worker-src ${webview.cspSource} blob: data:`,
       "frame-src 'none'",
     ].join("; ");
 
