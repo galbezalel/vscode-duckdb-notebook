@@ -147,9 +147,10 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
     const handleCellMouseEnter = (e: React.MouseEvent, content: string) => {
         if (!content) return;
 
-        // Check for overflow
+        // Check for overflow - always show if there are line breaks
         const element = e.currentTarget as HTMLElement;
-        if (element.scrollWidth <= element.clientWidth) {
+        const hasNewline = content.includes('\n');
+        if (!hasNewline && element.scrollWidth <= element.clientWidth) {
             return;
         }
 
@@ -282,6 +283,7 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
                                     if (rows.length === 0) return null;
                                     
                                     const ROW_HEIGHT = 28;
+                                    const isVirtual = !enableTextWrap || rows.length > 1000;
                                     const BROWSER_MAX_HEIGHT = 1500000; // Browsers start breaking deeply nested layout ~1.5m-3m px
 
                                     // Check if massive table, cap visual scroll height to prevent flex bounds breaking 
@@ -290,17 +292,22 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
                                     const buffer = 15;
                                     const visibleCount = displayRowLimit > 0 ? displayRowLimit : 30;
                                     
-                                    let startIndex = Math.floor(scrollTop / ROW_HEIGHT) - buffer;
-                                    if (startIndex < 0) startIndex = 0;
-                                    
-                                    let endIndex = startIndex + visibleCount + (buffer * 2);
-                                    if (endIndex > rows.length) endIndex = rows.length;
+                                    let startIndex = 0;
+                                    let endIndex = rows.length;
+
+                                    if (isVirtual) {
+                                        startIndex = Math.floor(scrollTop / ROW_HEIGHT) - buffer;
+                                        if (startIndex < 0) startIndex = 0;
+                                        
+                                        endIndex = startIndex + visibleCount + (buffer * 2);
+                                        if (endIndex > rows.length) endIndex = rows.length;
+                                    }
 
                                     const visibleRows = rows.slice(startIndex, endIndex);
 
                                     // We must simulate the total scrollable height so the scrollbar represents all rows
-                                    const topPadding = startIndex * ROW_HEIGHT;
-                                    const bottomPadding = Math.max(0, (rows.length - endIndex) * ROW_HEIGHT);
+                                    const topPadding = isVirtual ? startIndex * ROW_HEIGHT : 0;
+                                    const bottomPadding = isVirtual ? Math.max(0, (rows.length - endIndex) * ROW_HEIGHT) : 0;
 
                                     // Extremely large dom heights break browsers. Cap padding.
                                     const cappedBottomPadding = Math.min(bottomPadding, BROWSER_MAX_HEIGHT - topPadding);
@@ -315,7 +322,7 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
                                             {visibleRows.map((row, indexOffset) => {
                                                 const i = startIndex + indexOffset;
                                                 return (
-                                                    <tr key={i} style={{ height: ROW_HEIGHT }}>
+                                                    <tr key={i} style={{ height: enableTextWrap ? 'auto' : ROW_HEIGHT }}>
                                                         {columns.map((col, j) => {
                                                             const rawValue = row[col];
 
@@ -398,11 +405,11 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
                                                         >
                                                             {cellValue}
                                                         </a>
-                                                        ) : (
-                                                            cellValue
-                                                        )}
-                                                    </td>
-                                                );
+                                                    ) : (
+                                                        cellValue
+                                                    )}
+                                                </td>
+                                            );
                                             })}
                                         </tr>
                                     );

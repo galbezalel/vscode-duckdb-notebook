@@ -679,7 +679,7 @@ tr:hover td {
   background-color: var(--vscode-button-secondaryHoverBackground);
 }
 .wrap-text {
-  white-space: normal !important;
+  white-space: pre-wrap !important;
   overflow-wrap: break-word;
   height: auto;
 }
@@ -695,6 +695,7 @@ tr:hover td {
   pointer-events: none;
   max-width: 400px;
   word-wrap: break-word;
+  white-space: pre-wrap;
   font-size: 12px;
   box-shadow: 0 4px 8px rgba(0,0,0,0.2);
 }
