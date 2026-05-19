@@ -2,6 +2,11 @@
 
 All notable changes to the DuckDB Notebook extension will be documented in this file.
 
+## [0.0.51] - 2026-05-20
+
+### Fixed
+- **Line Break Rendering**: Fixed rendering of line breaks (`\n`) in table cells when Text Wrap is enabled, and in hover tooltips.
+
 ## [0.0.50] - 2026-05-03
 
 ### Fixed
