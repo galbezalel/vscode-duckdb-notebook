@@ -20,10 +20,11 @@ interface CellProps {
     isLast: boolean;
     forceJsonParsing: boolean;
     enableTextWrap: boolean;
+    renderMarkdown: boolean;
     displayRowLimit: number;
 }
 
-const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdvance, onUpdate, onRemove, onExport, onCopy, onOpenUrl, forceJsonParsing, enableTextWrap, displayRowLimit }) => {
+const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdvance, onUpdate, onRemove, onExport, onCopy, onOpenUrl, forceJsonParsing, enableTextWrap, renderMarkdown, displayRowLimit }) => {
     const {
         attributes,
         listeners,
@@ -166,7 +167,7 @@ const Cell: React.FC<CellProps> = ({ data, autoFocus, onRun, onStop, onRunAndAdv
             {
                 data.status === 'success' && data.columns && (
                     <div className="cell-results">
-                        <ResultTable columns={data.columns} rows={data.rows || []} columnTypes={data.columnTypes} onOpenUrl={onOpenUrl} forceJsonParsing={forceJsonParsing} enableTextWrap={enableTextWrap} displayRowLimit={displayRowLimit} />
+                        <ResultTable columns={data.columns} rows={data.rows || []} columnTypes={data.columnTypes} onOpenUrl={onOpenUrl} forceJsonParsing={forceJsonParsing} enableTextWrap={enableTextWrap} renderMarkdown={renderMarkdown} displayRowLimit={displayRowLimit} />
                     </div>
                 )
             }

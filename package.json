@@ -80,11 +80,13 @@
     "package": "vsce package"
   },
   "devDependencies": {
+    "@types/marked": "^5.0.2",
     "@types/node": "^20.11.20",
     "@types/react": "^19.2.6",
     "@types/react-dom": "^19.2.3",
     "@types/vscode": "^1.85.0",
     "esbuild": "^0.27.0",
+    "marked": "^18.0.4",
     "typescript": "^5.3.3"
   },
   "dependencies": {

@@ -49,6 +49,7 @@ const App: React.FC = () => {
         forceJsonParsing: false,
         allowExternalFileAccess: false,
         enableTextWrap: false,
+        renderMarkdown: false,
         displayRowLimit: 30
     });
 
@@ -737,6 +738,7 @@ const App: React.FC = () => {
                     onReorder={handleReorder}
                     forceJsonParsing={settings.forceJsonParsing}
                     enableTextWrap={settings.enableTextWrap}
+                    renderMarkdown={settings.renderMarkdown}
                     displayRowLimit={settings.displayRowLimit}
                 />
             </main>

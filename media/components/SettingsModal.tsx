@@ -7,6 +7,7 @@ interface Settings {
     forceJsonParsing: boolean;
     allowExternalFileAccess: boolean;
     enableTextWrap: boolean;
+    renderMarkdown: boolean;
     displayRowLimit: number;
 }
 
@@ -32,7 +33,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
     };
 
     const handleChange = (key: keyof Settings, value: any) => {
-        setLocalSettings(prev => ({ ...prev, [key]: value }));
+        setLocalSettings(prev => {
+            const next = { ...prev, [key]: value };
+            if (key === 'enableTextWrap' && !value) {
+                next.renderMarkdown = false;
+            }
+            return next;
+        });
     };
 
     return (
@@ -109,6 +116,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings
                             </label>
                             <p className="setting-desc">
                                 If enabled, long text in grid cells will wrap instead of being truncated.
+                            </p>
+                        </div>
+                        <div className="setting-item">
+                            <label className="checkbox-label" style={!localSettings.enableTextWrap ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
+                                <input
+                                    type="checkbox"
+                                    checked={localSettings.enableTextWrap && localSettings.renderMarkdown}
+                                    disabled={!localSettings.enableTextWrap}
+                                    onChange={(e) => handleChange('renderMarkdown', e.target.checked)}
+                                />
+                                Render Markdown
+                            </label>
+                            <p className="setting-desc" style={!localSettings.enableTextWrap ? { opacity: 0.5 } : {}}>
+                                If enabled, markdown text in grid cells will be formatted and rendered as HTML.
+                                {!localSettings.enableTextWrap && <span style={{ color: 'var(--vscode-descriptionForeground)', display: 'block', marginTop: '4px', fontStyle: 'italic' }}>Requires Text Wrap to be enabled.</span>}
                             </p>
                         </div>
                     </div>

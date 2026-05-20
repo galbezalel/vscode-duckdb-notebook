@@ -1,5 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, ChevronRight, ChevronDown } from 'lucide-react';
+import { marked } from 'marked';
+
+// Configure custom marked link renderer to add target="_blank" so VS Code opens links in default browser
+const customRenderer = {
+    link({ href, title, text }: any) {
+        const titleAttr = title ? ` title="${title}"` : '';
+        return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
+    }
+};
+marked.use({ renderer: customRenderer });
 
 interface ResultTableProps {
     columns: string[];
@@ -8,12 +18,22 @@ interface ResultTableProps {
     onOpenUrl: (url: string) => void;
     forceJsonParsing: boolean;
     enableTextWrap: boolean;
+    renderMarkdown: boolean;
     displayRowLimit: number;
 }
 
 const isUrl = (text: string): boolean => {
     // Simple regex for URL detection
     return /^https?:\/\/\S+$/.test(text);
+};
+
+const getMarkdownHtml = (text: string) => {
+    try {
+        return { __html: marked.parse(text) as string };
+    } catch (e) {
+        console.error('Failed to parse markdown:', e);
+        return { __html: text };
+    }
 };
 
 // --- JSON Tree Viewer Component ---
@@ -92,7 +112,7 @@ const JsonTree: React.FC<JsonTreeProps> = ({ data, label, expandAll = false }) =
     );
 };
 
-const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, forceJsonParsing, columnTypes, enableTextWrap, displayRowLimit }) => {
+const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, forceJsonParsing, columnTypes, enableTextWrap, renderMarkdown, displayRowLimit }) => {
     const [colWidths, setColWidths] = useState<number[]>([]);
     const [selectedData, setSelectedData] = useState<any | null>(null);
     const [tooltip, setTooltip] = useState<{ visible: boolean; x: number; y: number; content: string } | null>(null);
@@ -382,6 +402,13 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
                                             }
 
                                             const isCellUrl = isUrl(cellValue);
+                                            const isMarkdownCell = renderMarkdown && enableTextWrap && (
+                                                colType.includes('VARCHAR') ||
+                                                colType.includes('TEXT') ||
+                                                colType.includes('UTF8') ||
+                                                colType.includes('STRING') ||
+                                                (!columnTypes && typeof rawValue === 'string')
+                                            );
 
                                             // Determine classes
                                             const cellClass = enableTextWrap ? 'wrap-text' : '';
@@ -394,7 +421,9 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
                                                     onMouseLeave={handleCellMouseLeave}
                                                     onMouseMove={handleCellMouseMove}
                                                 >
-                                                    {isCellUrl ? (
+                                                    {isMarkdownCell ? (
+                                                        <div className="markdown-cell-content" dangerouslySetInnerHTML={getMarkdownHtml(cellValue)} />
+                                                    ) : isCellUrl ? (
                                                         <a
                                                             href={cellValue}
                                                             className="table-link"
