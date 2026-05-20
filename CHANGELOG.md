@@ -2,6 +2,12 @@
 
 All notable changes to the DuckDB Notebook extension will be documented in this file.
 
+## [0.0.53] - 2026-05-20
+
+### Added
+- **Markdown Cell Rendering**: Added a new "Render Markdown" option under view settings. When enabled along with Text Wrap, string cells containing Markdown formatting are rendered as styled HTML.
+- **Working Hyperlinks**: Hyperlinks in rendered markdown cells natively open in the system default browser.
+
 ## [0.0.52] - 2026-05-20
 
 ### Fixed
