@@ -2,6 +2,11 @@
 
 All notable changes to the DuckDB Notebook extension will be documented in this file.
 
+## [0.0.52] - 2026-05-20
+
+### Fixed
+- **Hover Tooltips**: Disabled hover tooltips when Text Wrap is active to prevent blocking the full cell text view.
+
 ## [0.0.51] - 2026-05-20
 
 ### Fixed
