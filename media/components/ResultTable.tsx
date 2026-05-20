@@ -145,7 +145,7 @@ const ResultTable: React.FC<ResultTableProps> = ({ columns, rows, onOpenUrl, for
     };
 
     const handleCellMouseEnter = (e: React.MouseEvent, content: string) => {
-        if (!content) return;
+        if (!content || enableTextWrap) return;
 
         // Check for overflow - always show if there are line breaks
         const element = e.currentTarget as HTMLElement;
